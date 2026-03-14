@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package solprobe.v1;
+
+import "metrics.proto";
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_INFO = 1;
+  SEVERITY_WARNING = 2;
+  SEVERITY_CRITICAL = 3;
+}
+
+enum AlertSource {
+  ALERT_SOURCE_UNSPECIFIED = 0;
+  ALERT_SOURCE_EDGE = 1;    // Rust sidecar threshold
+  ALERT_SOURCE_CENTRAL = 2; // Python statistical detector
+}
+
+enum AlertType {
+  ALERT_TYPE_UNSPECIFIED = 0;
+
+  // Hardware faults (edge-detected)
+  ALERT_TYPE_THERMAL_THROTTLE = 1;
+  ALERT_TYPE_MEMORY_PRESSURE = 2;
+  ALERT_TYPE_XID_ERROR = 3;
+  ALERT_TYPE_ECC_ERROR = 4;
+  ALERT_TYPE_CLOCK_THROTTLE = 5;
+  ALERT_TYPE_PCIE_ERROR = 6;
+
+  // Training anomalies (edge or central)
+  ALERT_TYPE_NCCL_TIMEOUT = 10;
+  ALERT_TYPE_GRADIENT_EXPLOSION = 11;
+  ALERT_TYPE_LOSS_PLATEAU = 12;
+  ALERT_TYPE_LOSS_SPIKE = 13;
+
+  // DiLoCo-specific (central)
+  ALERT_TYPE_DILOCO_SYNC_DRIFT = 20;
+  ALERT_TYPE_STRAGGLER_DETECTED = 21;
+  ALERT_TYPE_PSEUDO_GRAD_DIVERGENCE = 22;
+  ALERT_TYPE_INNER_OUTER_DIVERGENCE = 23;
+}
+
+message Alert {
+  string      alert_id = 1;
+  string      node_id = 2;
+  int64       timestamp_ms = 3;
+  Severity    severity = 4;
+  AlertSource source = 5;
+  AlertType   alert_type = 6;
+
+  string description = 10;
+  float  confidence = 11;  // 0.0–1.0, meaningful for CENTRAL alerts
+  map<string, string> evidence = 12;
+
+  optional uint32 gpu_index = 20;
+  optional string job_id = 21;
+}
+
+message AlertAck {
+  bool   ok = 1;
+  string alert_id = 2;
+}
+
+message NodeRegistration {
+  string node_id = 1;
+  string gpu_model = 2;
+  uint32 gpu_count = 3;
+  map<string, string> labels = 4;
+}
+
+message Command {
+  string command_id = 1;
+  string command_type = 2; // "update_thresholds", "inject_fault", etc.
+  map<string, string> params = 3;
+}
+
+// Central gRPC service — backend receives from N sidecars.
+service SolProbeService {
+  // Sidecar streams metric batches at ~1s intervals.
+  rpc StreamMetrics(stream MetricsBatch) returns (StreamAck);
+
+  // Sidecar sends edge-detected alerts immediately.
+  rpc ReportAlert(Alert) returns (AlertAck);
+
+  // Backend pushes config updates / commands back to the sidecar.
+  rpc Subscribe(NodeRegistration) returns (stream Command);
+}

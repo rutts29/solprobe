@@ -1,0 +1,25 @@
+services:
+  sidecar:
+    build:
+      context: .
+      dockerfile: sidecar/Dockerfile
+    command: ["--simulate", "--node-id", "node-0", "--backend-addr", "http://backend:50051"]
+    ports:
+      - "9100:9100"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+      - "50051:50051"
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"

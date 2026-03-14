@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package solprobe.v1;
+
+// GPU hardware metrics from DCGM.
+// Scoped to T4 (Turing, TU104) and L4 (Ada Lovelace, AD104).
+// Excludes NVLink, HBM, NVSwitch, and MIG fields.
+message GpuMetrics {
+  string node_id = 1;
+  uint32 gpu_index = 2;
+  string gpu_model = 3; // "T4" or "L4"
+  int64  timestamp_ms = 4;
+
+  // Temperature — DCGM_FI_DEV_GPU_TEMP, DCGM_FI_DEV_MEMORY_TEMP
+  float gpu_temp_c = 10;
+  float memory_temp_c = 11;
+
+  // Utilization — DCGM_FI_DEV_GPU_UTIL, DCGM_FI_DEV_MEM_COPY_UTIL
+  float gpu_utilization_pct = 20;
+  float mem_copy_utilization_pct = 21;
+
+  // Framebuffer — DCGM_FI_DEV_FB_USED, DCGM_FI_DEV_FB_FREE
+  float fb_used_mb = 30;
+  float fb_free_mb = 31;
+
+  // Power — DCGM_FI_DEV_POWER_USAGE
+  float power_usage_w = 40;
+
+  // Errors — DCGM_FI_DEV_XID_ERRORS, ECC counters, throttle bitmask
+  uint32 xid_errors = 50;
+  uint64 ecc_sbe_count = 51;
+  uint64 ecc_dbe_count = 52;
+  uint64 clock_throttle_reasons = 53;
+
+  // PCIe — DCGM_FI_DEV_PCIE_REPLAY_COUNTER, PROF_PCIE_TX/RX_BYTES
+  uint64 pcie_replay_counter = 60;
+  float  pcie_tx_bytes_per_sec = 61;
+  float  pcie_rx_bytes_per_sec = 62;
+
+  // Profiling — DCGM_FI_PROF_SM_ACTIVE, DCGM_FI_PROF_PIPE_TENSOR_ACTIVE
+  float sm_active_pct = 70;
+  float tensor_active_pct = 71;
+
+  // T4-specific: page retirement — DCGM_FI_DEV_RETIRED_SBE/DBE
+  uint64 retired_pages_sbe = 80;
+  uint64 retired_pages_dbe = 81;
+
+  // L4-specific: row remapping — DCGM_FI_DEV_*_REMAPPED_ROWS
+  uint64 remapped_rows_correctable = 82;
+  uint64 remapped_rows_uncorrectable = 83;
+  bool   row_remap_failure = 84;
+}
+
+// Training telemetry from PyTorch callback via shared memory.
+message TrainingMetrics {
+  string node_id = 1;
+  string job_id = 2;
+  int64  timestamp_ms = 3;
+  uint64 step = 4;
+
+  float loss = 10;
+  float gradient_norm = 11;
+  float learning_rate = 12;
+  float throughput_tps = 13; // tokens/sec
+  float mfu_pct = 14;        // model FLOP utilization
+}
+
+// DiLoCo-specific distributed training metrics.
+message DiLoCoMetrics {
+  string node_id = 1;
+  string job_id = 2;
+  int64  timestamp_ms = 3;
+
+  uint64 inner_step = 10;
+  uint64 outer_step = 11;
+  float  inner_loss = 12;
+  float  outer_loss = 13;
+  float  pseudo_grad_norm = 14;
+  float  sync_duration_ms = 15;
+  float  worker_speed_ratio = 16; // ratio vs cluster average
+  bool   is_straggler = 17;
+}
+
+// Batch of metrics streamed to the backend at 1s intervals.
+message MetricsBatch {
+  repeated GpuMetrics     gpu = 1;
+  optional TrainingMetrics training = 2;
+  optional DiLoCoMetrics   diloco = 3;
+}
+
+message StreamAck {
+  bool   ok = 1;
+  string message = 2;
+}
