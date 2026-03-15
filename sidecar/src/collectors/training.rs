@@ -76,3 +76,77 @@ impl TrainingMetricsReader {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    /// Write a valid 64-byte binary file matching the expected layout.
+    fn write_test_file(
+        path: &std::path::Path,
+        valid_flag: u8,
+        timestamp_ms: i64,
+        step: u64,
+        loss: f32,
+        gradient_norm: f32,
+        learning_rate: f32,
+        throughput_tps: f32,
+        mfu_pct: f32,
+    ) {
+        let mut buf = vec![0u8; 64]; // padded to 64 bytes
+        buf[0] = valid_flag;
+        buf[1..9].copy_from_slice(&timestamp_ms.to_le_bytes());
+        buf[9..17].copy_from_slice(&step.to_le_bytes());
+        buf[17..21].copy_from_slice(&loss.to_le_bytes());
+        buf[21..25].copy_from_slice(&gradient_norm.to_le_bytes());
+        buf[25..29].copy_from_slice(&learning_rate.to_le_bytes());
+        buf[29..33].copy_from_slice(&throughput_tps.to_le_bytes());
+        buf[33..37].copy_from_slice(&mfu_pct.to_le_bytes());
+        // bytes 37..64 are zero padding
+        let mut f = std::fs::File::create(path).unwrap();
+        f.write_all(&buf).unwrap();
+        f.sync_all().unwrap();
+    }
+
+    #[test]
+    fn test_read_valid_file() {
+        let node_id = format!("test_valid_{}", std::process::id());
+        let path = PathBuf::from(format!("/tmp/solprobe_training_{}.bin", node_id));
+
+        write_test_file(&path, 1, 1700000000000, 42, 2.5, 1.2, 3e-4, 5000.0, 45.0);
+
+        let reader = TrainingMetricsReader::new(node_id);
+        let metrics = reader.read().expect("Should parse valid file");
+
+        assert_eq!(metrics.timestamp_ms, 1700000000000);
+        assert_eq!(metrics.step, 42);
+        assert!((metrics.loss - 2.5).abs() < 1e-6);
+        assert!((metrics.gradient_norm - 1.2).abs() < 1e-6);
+        assert!((metrics.learning_rate - 3e-4).abs() < 1e-7);
+        assert!((metrics.throughput_tps - 5000.0).abs() < 1e-3);
+        assert!((metrics.mfu_pct - 45.0).abs() < 1e-6);
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_read_invalid_flag_returns_none() {
+        let node_id = format!("test_invalid_{}", std::process::id());
+        let path = PathBuf::from(format!("/tmp/solprobe_training_{}.bin", node_id));
+
+        write_test_file(&path, 0, 1700000000000, 10, 1.0, 0.5, 1e-4, 3000.0, 40.0);
+
+        let reader = TrainingMetricsReader::new(node_id);
+        assert!(reader.read().is_none(), "valid_flag=0 should return None");
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_read_missing_file_returns_none() {
+        let node_id = format!("test_missing_{}", std::process::id());
+        let reader = TrainingMetricsReader::new(node_id);
+        assert!(reader.read().is_none(), "Missing file should return None");
+    }
+}
