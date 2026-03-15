@@ -16,9 +16,14 @@ export default function OverviewPage() {
   const { alerts, loading: alertsLoading, prepend } = useAlerts({ limit: 10 });
   const ws = useWebSocket();
   const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchHealth().then(setHealth).catch(() => {});
+    fetchHealth()
+      .then(setHealth)
+      .catch((err) => {
+        setHealthError(err instanceof Error ? err.message : "Failed to fetch health");
+      });
   }, []);
 
   const onAlert = useCallback(
@@ -28,14 +33,27 @@ export default function OverviewPage() {
 
   useRealtime(ws.subscribe, { onAlert });
 
-  const avgGpuUtil =
-    nodes.length > 0
-      ? nodes.reduce((sum, n) => sum + (n.gpu_metrics?.gpu_utilization_pct ?? 0), 0) / nodes.length
-      : 0;
+  // Compute avg GPU util from latest_metrics (array per node)
+  const avgGpuUtil = (() => {
+    const gpuUtils: number[] = [];
+    for (const n of nodes) {
+      for (const m of n.latest_metrics) {
+        gpuUtils.push(m.gpu_utilization_pct);
+      }
+    }
+    return gpuUtils.length > 0 ? gpuUtils.reduce((a, b) => a + b, 0) / gpuUtils.length : 0;
+  })();
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Cluster Overview</h1>
+
+      {healthError && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
+          Backend unreachable: {healthError}
+        </div>
+      )}
+
       <HealthCards
         connectedNodes={health?.connected_sidecars ?? nodes.length}
         activeAlerts={health?.total_alerts ?? alerts.length}

@@ -12,7 +12,7 @@ import type { DiagnosisResult } from "@/lib/types";
 
 export default function DiagnosesPage() {
   const [nodeFilter, setNodeFilter] = useState("");
-  const { diagnoses, loading, append } = useDiagnoses({
+  const { diagnoses, loading, error, refresh, append } = useDiagnoses({
     node_id: nodeFilter || undefined,
     limit: 50,
   });
@@ -34,6 +34,13 @@ export default function DiagnosesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Diagnoses</h1>
       </div>
+
+      {error && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+          {error}
+          <button onClick={refresh} className="ml-2 underline">Retry</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2">

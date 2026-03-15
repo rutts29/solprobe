@@ -56,26 +56,9 @@ export interface AlertModel {
   job_id?: string;
 }
 
-export interface DiagnosisResult {
-  diagnosis_id: string;
-  alert_id: string;
-  node_id: string;
-  timestamp_ms: number;
-  root_cause: string;
-  confidence: number;
-  reasoning: string;
-  evidence_chain: EvidenceItem[];
-  recommended_action: RecommendedAction;
-  similar_incidents: string[];
-  status: string;
-  error?: string;
-  llm_model: string;
-  latency_ms: number;
-}
-
 export interface EvidenceItem {
   metric: string;
-  value: string | number;
+  value: string;
   context: string;
 }
 
@@ -85,20 +68,45 @@ export interface RecommendedAction {
   urgency: "immediate" | "soon" | "monitor";
 }
 
-export interface NodeStatus {
-  node_id: string;
-  connected: boolean;
-  last_seen_ms: number;
-  gpu_metrics?: GpuMetrics;
-  training_metrics?: TrainingMetrics;
-  diloco_metrics?: DiLoCoMetrics;
-  active_alerts: number;
+export interface SimilarIncident {
+  diagnosis_id: string;
+  root_cause: string;
+  similarity: number;
 }
 
-export interface EnrichedAlert extends AlertModel {
-  metrics_context?: Record<string, unknown>;
-  node_history?: AlertModel[];
-  correlated?: AlertModel[];
+export interface DiagnosisResult {
+  diagnosis_id: string;
+  alert_id: string;
+  alert_type: string;
+  node_id: string;
+  timestamp_ms: number;
+  root_cause: string;
+  confidence: number;
+  reasoning: string;
+  evidence_chain: EvidenceItem[];
+  recommended_action: RecommendedAction;
+  similar_incidents: SimilarIncident[];
+  llm_model: string;
+  latency_ms: number;
+  status: "completed" | "failed" | "rate_limited";
+  error?: string;
+}
+
+export interface NodeStatus {
+  node_id: string;
+  gpu_model: string;
+  gpu_count: number;
+  last_seen_ms: number;
+  latest_metrics: GpuMetrics[];
+  latest_training: TrainingMetrics | null;
+  latest_diloco: DiLoCoMetrics | null;
+}
+
+export interface EnrichedAlert {
+  alert: AlertModel;
+  recent_metrics: Record<string, unknown>[];
+  node_history: AlertModel[];
+  correlated_events: AlertModel[];
 }
 
 export interface HealthStatus {
@@ -117,5 +125,5 @@ export interface NodeMetricsHistory {
 
 export type WebSocketMessage =
   | { type: "alert"; data: AlertModel }
-  | { type: "metric_summary"; data: Record<string, NodeStatus> }
+  | { type: "metric_summary"; data: NodeStatus }
   | { type: "diagnosis"; data: DiagnosisResult };

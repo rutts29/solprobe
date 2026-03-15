@@ -43,20 +43,16 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
             </thead>
             <tbody>
               {nodes.map((node) => {
-                const gpu = node.gpu_metrics;
+                const gpu = node.latest_metrics[0] ?? null;
                 const memPct = gpu ? (gpu.fb_used_mb / (gpu.fb_used_mb + gpu.fb_free_mb)) * 100 : 0;
-                const hasAlert = node.active_alerts > 0;
                 return (
                   <tr
                     key={node.node_id}
-                    className={cn(
-                      "cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/50",
-                      hasAlert && "bg-red-500/5"
-                    )}
+                    className="cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/50"
                     onClick={() => router.push(`/nodes/${node.node_id}`)}
                   >
                     <td className="py-2 pr-4 font-mono">{node.node_id}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">{gpu?.gpu_model || "—"}</td>
+                    <td className="py-2 pr-4 text-muted-foreground">{node.gpu_model || "—"}</td>
                     <td className={cn("py-2 pr-4", gpu && gpu.gpu_temp_c > 80 ? "text-red-400" : "text-foreground")}>
                       {gpu ? `${gpu.gpu_temp_c}°C` : "—"}
                     </td>

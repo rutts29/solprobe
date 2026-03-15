@@ -17,21 +17,46 @@ interface AlertDetailProps {
 
 export function AlertDetail({ alert, onClose }: AlertDetailProps) {
   const [enriched, setEnriched] = useState<EnrichedAlert | null>(null);
+  const [enrichedError, setEnrichedError] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<DiagnosisResult | null>(null);
+  const [diagnosisNotFound, setDiagnosisNotFound] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchEnrichedAlert(alert.alert_id).then(setEnriched).catch(() => {});
-    fetchAlertDiagnosis(alert.alert_id).then(setDiagnosis).catch(() => {});
+    setEnriched(null);
+    setEnrichedError(null);
+    setDiagnosis(null);
+    setDiagnosisNotFound(false);
+    setRequestError(null);
+
+    fetchEnrichedAlert(alert.alert_id)
+      .then(setEnriched)
+      .catch((err) => {
+        if (err instanceof Error && err.message.includes("404")) return;
+        setEnrichedError(err instanceof Error ? err.message : "Failed to load enriched alert");
+      });
+
+    fetchAlertDiagnosis(alert.alert_id)
+      .then(setDiagnosis)
+      .catch((err) => {
+        if (err instanceof Error && err.message.includes("404")) {
+          setDiagnosisNotFound(true);
+          return;
+        }
+        console.error("[AlertDetail] failed to fetch diagnosis:", err);
+      });
   }, [alert.alert_id]);
 
   async function handleRequestDiagnosis() {
     setRequesting(true);
+    setRequestError(null);
     try {
       const result = await requestDiagnosis(alert.alert_id);
       setDiagnosis(result);
-    } catch {
-      // Silently handled
+      setDiagnosisNotFound(false);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : "Diagnosis request failed");
     } finally {
       setRequesting(false);
     }
@@ -74,12 +99,19 @@ export function AlertDetail({ alert, onClose }: AlertDetailProps) {
           </Card>
         )}
 
-        {/* Correlated alerts */}
-        {enriched?.correlated && enriched.correlated.length > 0 && (
+        {/* Enrichment error */}
+        {enrichedError && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
+            Failed to load enriched data: {enrichedError}
+          </div>
+        )}
+
+        {/* Correlated alerts — uses EnrichedAlert.correlated_events */}
+        {enriched?.correlated_events && enriched.correlated_events.length > 0 && (
           <Card>
             <CardHeader><CardTitle>Correlated Events</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {enriched.correlated.map((a) => (
+              {enriched.correlated_events.map((a) => (
                 <div key={a.alert_id} className="flex items-center gap-2 text-sm">
                   <SeverityBadge severity={a.severity} />
                   <span>{a.alert_type}</span>
@@ -116,9 +148,18 @@ export function AlertDetail({ alert, onClose }: AlertDetailProps) {
             </CardContent>
           </Card>
         ) : (
-          <Button onClick={handleRequestDiagnosis} disabled={requesting}>
-            {requesting ? "Requesting..." : "Request Diagnosis"}
-          </Button>
+          <div className="space-y-2">
+            {requestError && (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                {requestError}
+              </div>
+            )}
+            {diagnosisNotFound && (
+              <Button onClick={handleRequestDiagnosis} disabled={requesting}>
+                {requesting ? "Requesting..." : "Request Diagnosis"}
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -11,31 +11,22 @@ interface NodeCardProps {
 }
 
 export function NodeCard({ node }: NodeCardProps) {
-  const gpu = node.gpu_metrics;
+  const gpu = node.latest_metrics[0] ?? null;
   const memPct = gpu ? (gpu.fb_used_mb / (gpu.fb_used_mb + gpu.fb_free_mb)) * 100 : 0;
 
   return (
     <Link href={`/nodes/${node.node_id}`}>
-      <Card className={cn("transition-colors hover:bg-accent/30", node.active_alerts > 0 && "border-red-500/30")}>
+      <Card className="transition-colors hover:bg-accent/30">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="font-mono text-sm">{node.node_id}</CardTitle>
-          <div className="flex gap-2">
-            {node.connected ? (
-              <Badge variant="success">Connected</Badge>
-            ) : (
-              <Badge variant="destructive">Offline</Badge>
-            )}
-            {node.active_alerts > 0 && (
-              <Badge variant="destructive">{node.active_alerts} alerts</Badge>
-            )}
-          </div>
+          <Badge variant="success">{node.gpu_count} GPU{node.gpu_count !== 1 ? "s" : ""}</Badge>
         </CardHeader>
         <CardContent>
           {gpu ? (
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground">GPU: </span>
-                <span>{gpu.gpu_model}</span>
+                <span>{node.gpu_model}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Temp: </span>

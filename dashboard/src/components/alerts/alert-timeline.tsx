@@ -16,14 +16,19 @@ interface AlertTimelineProps {
 
 export function AlertTimeline({ alerts, onSelectAlert }: AlertTimelineProps) {
   const [diagnosing, setDiagnosing] = useState<Set<string>>(new Set());
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function handleDiagnose(alertId: string, e: React.MouseEvent) {
     e.stopPropagation();
     setDiagnosing((s) => new Set(s).add(alertId));
+    setErrors((prev) => { const next = { ...prev }; delete next[alertId]; return next; });
     try {
       await requestDiagnosis(alertId);
-    } catch {
-      // Error handled silently — diagnosis will appear via WebSocket
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        [alertId]: err instanceof Error ? err.message : "Diagnosis failed",
+      }));
     } finally {
       setDiagnosing((s) => {
         const next = new Set(s);
@@ -75,6 +80,9 @@ export function AlertTimeline({ alerts, onSelectAlert }: AlertTimelineProps) {
                 >
                   {diagnosing.has(alert.alert_id) ? "Diagnosing..." : "Diagnose"}
                 </Button>
+                {errors[alert.alert_id] && (
+                  <span className="text-xs text-red-400">{errors[alert.alert_id]}</span>
+                )}
               </div>
             </div>
           </CardContent>

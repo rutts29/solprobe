@@ -18,12 +18,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .then((h) => {
         setConnectedNodes(h.connected_sidecars);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("[AppShell] failed to fetch health:", err);
+      });
   }, []);
 
   // Update connected nodes from WS metric summaries
   useEffect(() => {
-    const count = Object.values(ws.nodeStatuses).filter((n) => n.connected).length;
+    const count = Object.keys(ws.nodeStatuses).length;
     if (count > 0) setConnectedNodes(count);
   }, [ws.nodeStatuses]);
 

@@ -14,7 +14,7 @@ const SEVERITIES = ["ALL", "CRITICAL", "WARNING", "INFO"] as const;
 export default function AlertsPage() {
   const [severity, setSeverity] = useState<string>("ALL");
   const [selectedAlert, setSelectedAlert] = useState<AlertModel | null>(null);
-  const { alerts, loading, prepend } = useAlerts({
+  const { alerts, loading, error, refresh, prepend } = useAlerts({
     severity: severity === "ALL" ? undefined : severity,
     limit: 50,
   });
@@ -32,6 +32,13 @@ export default function AlertsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Alerts</h1>
       </div>
+
+      {error && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+          {error}
+          <button onClick={refresh} className="ml-2 underline">Retry</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2">
