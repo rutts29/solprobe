@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solprobe-dashboard
+  namespace: {{ include "solprobe.namespace" . }}
+  labels:
+    {{- include "solprobe.dashboard.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dashboard.replicas }}
+  selector:
+    matchLabels:
+      app: solprobe-dashboard
+  template:
+    metadata:
+      labels:
+        app: solprobe-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: {{ .Values.dashboard.image }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.dashboard.port }}
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://solprobe-backend:{{ .Values.backend.port }}"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
