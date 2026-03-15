@@ -1,0 +1,33 @@
+---
+- name: Add NVIDIA DCGM repository (Ubuntu)
+  apt_repository:
+    repo: "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64 /"
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install DCGM (Ubuntu)
+  apt:
+    name: datacenter-gpu-manager
+    state: present
+    update_cache: true
+  when: ansible_os_family == "Debian"
+
+- name: Install DCGM (RHEL)
+  yum:
+    name: datacenter-gpu-manager
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Enable and start DCGM service
+  systemd:
+    name: nvidia-dcgm
+    enabled: true
+    state: started
+
+- name: Wait for DCGM to be ready
+  command: dcgmi discovery -l
+  register: dcgm_check
+  retries: 5
+  delay: 3
+  until: dcgm_check.rc == 0
+  changed_when: false

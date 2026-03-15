@@ -1,0 +1,7 @@
+sidecar:
+  simulate: true
+  nodeSelector: {}
+
+monitoring:
+  grafana:
+    adminPassword: dev
