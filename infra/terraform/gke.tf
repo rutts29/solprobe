@@ -11,6 +11,19 @@ resource "google_container_cluster" "solprobe" {
   remove_default_node_pool = true
   initial_node_count       = 1
 
+  private_cluster_config {
+    enable_private_nodes    = true
+    enable_private_endpoint = false
+    master_ipv4_cidr_block  = "172.16.0.0/28"
+  }
+
+  master_authorized_networks_config {
+    cidr_blocks {
+      cidr_block   = var.authorized_network
+      display_name = "authorized-network"
+    }
+  }
+
   workload_identity_config {
     workload_pool = "${var.project_id}.svc.id.goog"
   }
@@ -41,7 +54,9 @@ resource "google_container_node_pool" "default" {
 
     service_account = google_service_account.gke_nodes.email
     oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform",
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring",
+      "https://www.googleapis.com/auth/devstorage.read_only",
     ]
 
     workload_metadata_config {
@@ -84,7 +99,9 @@ resource "google_container_node_pool" "gpu" {
 
     service_account = google_service_account.gke_nodes.email
     oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform",
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring",
+      "https://www.googleapis.com/auth/devstorage.read_only",
     ]
 
     workload_metadata_config {

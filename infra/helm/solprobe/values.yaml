@@ -3,7 +3,7 @@ global:
 
 backend:
   replicas: 2
-  image: rutts29/solprobe-backend:latest
+  image: rutts29/solprobe-backend:v0.1.0
   port: 8000
   grpcPort: 50051
   resources:
@@ -17,7 +17,7 @@ backend:
   logLevel: info
 
 sidecar:
-  image: rutts29/solprobe-sidecar:latest
+  image: rutts29/solprobe-sidecar:v0.1.0
   metricsPort: 9100
   simulate: false
   resources:
@@ -32,13 +32,16 @@ sidecar:
 
 dashboard:
   replicas: 1
-  image: rutts29/solprobe-dashboard:latest
+  image: rutts29/solprobe-dashboard:v0.1.0
   port: 3000
 
 ingress:
   enabled: true
   className: nginx
+  host: solprobe.example.com
   annotations: {}
+  tls:
+    secretName: solprobe-tls
 
 monitoring:
   prometheus:
@@ -46,5 +49,4 @@ monitoring:
     scrapeInterval: 5s
   grafana:
     enabled: true
-    adminPassword: admin
     storageSize: 1Gi

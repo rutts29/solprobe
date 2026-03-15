@@ -21,6 +21,6 @@ resource "google_storage_bucket" "checkpoints" {
 
 resource "google_storage_bucket_iam_member" "gke_checkpoints" {
   bucket = google_storage_bucket.checkpoints.name
-  role   = "roles/storage.objectAdmin"
+  role   = "roles/storage.objectViewer"
   member = "serviceAccount:${google_service_account.gke_nodes.email}"
 }

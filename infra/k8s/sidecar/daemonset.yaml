@@ -17,6 +17,11 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9100"
     spec:
+      serviceAccountName: solprobe-sidecar
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       nodeSelector:
         solprobe.io/gpu: "true"
       tolerations:
@@ -25,7 +30,12 @@ spec:
           effect: NoSchedule
       containers:
         - name: sidecar
-          image: rutts29/solprobe-sidecar:latest
+          image: rutts29/solprobe-sidecar:v0.1.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           args:
             - "--node-id"
             - "$(NODE_NAME)"
@@ -46,6 +56,18 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 5
           volumeMounts:
             - name: mmap-volume
               mountPath: /tmp

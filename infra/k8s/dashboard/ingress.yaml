@@ -5,12 +5,15 @@ metadata:
   namespace: solprobe
   labels:
     app: solprobe
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - solprobe.example.com
+      secretName: solprobe-tls
   rules:
-    - http:
+    - host: solprobe.example.com
+      http:
         paths:
           - path: /api/
             pathType: Prefix

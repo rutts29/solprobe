@@ -3,6 +3,12 @@ variable "project_id" {
   type        = string
 }
 
+variable "authorized_network" {
+  description = "CIDR block allowed to access the GKE master API"
+  type        = string
+  default     = "0.0.0.0/0"
+}
+
 variable "region" {
   description = "GCP region for resources"
   type        = string

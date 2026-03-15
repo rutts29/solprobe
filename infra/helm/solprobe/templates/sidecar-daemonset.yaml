@@ -17,6 +17,11 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.sidecar.metricsPort }}"
     spec:
+      serviceAccountName: solprobe-sidecar
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       {{- if .Values.sidecar.nodeSelector }}
       nodeSelector:
         {{- toYaml .Values.sidecar.nodeSelector | nindent 8 }}
@@ -28,6 +33,11 @@ spec:
       containers:
         - name: sidecar
           image: {{ .Values.sidecar.image }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           args:
             - "--node-id"
             - "$(NODE_NAME)"
@@ -46,6 +56,18 @@ spec:
               containerPort: {{ .Values.sidecar.metricsPort }}
           resources:
             {{- toYaml .Values.sidecar.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 5
           volumeMounts:
             - name: mmap-volume
               mountPath: /tmp

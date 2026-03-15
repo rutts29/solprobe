@@ -20,24 +20,25 @@ resource "google_compute_subnetwork" "solprobe" {
   }
 }
 
-# Allow internal traffic within the VPC
+# Allow internal traffic within the VPC subnet and pod/service ranges
 resource "google_compute_firewall" "internal" {
   name    = "${var.cluster_name}-allow-internal"
   network = google_compute_network.solprobe.name
 
   allow {
     protocol = "tcp"
-  }
-
-  allow {
-    protocol = "udp"
+    ports    = ["8000", "9090", "9100", "3000", "50051"]
   }
 
   allow {
     protocol = "icmp"
   }
 
-  source_ranges = ["10.0.0.0/8"]
+  source_ranges = [
+    "10.0.0.0/20",
+    "10.4.0.0/14",
+    "10.8.0.0/20",
+  ]
 }
 
 # Allow health check traffic from GCP load balancers

@@ -17,15 +17,28 @@ spec:
       labels:
         app: grafana
     spec:
+      serviceAccountName: grafana
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
         - name: grafana
           image: grafana/grafana:10.4.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: http
               containerPort: 3000
           env:
             - name: GF_SECURITY_ADMIN_PASSWORD
-              value: {{ .Values.monitoring.grafana.adminPassword | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-secret
+                  key: admin-password
           resources:
             requests:
               memory: "128Mi"
@@ -38,6 +51,8 @@ spec:
               mountPath: /var/lib/grafana
             - name: grafana-datasources
               mountPath: /etc/grafana/provisioning/datasources
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: grafana-storage
           persistentVolumeClaim:
@@ -45,6 +60,8 @@ spec:
         - name: grafana-datasources
           configMap:
             name: grafana-datasources
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

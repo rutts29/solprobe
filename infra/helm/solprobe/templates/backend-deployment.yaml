@@ -18,9 +18,19 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.backend.port }}"
     spec:
+      serviceAccountName: solprobe-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
         - name: backend
           image: {{ .Values.backend.image }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: http
               containerPort: {{ .Values.backend.port }}
@@ -50,3 +60,9 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

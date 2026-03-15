@@ -4,42 +4,72 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INFRA_DIR="$(dirname "$SCRIPT_DIR")"
 ROOT_DIR="$(dirname "$INFRA_DIR")"
+IMAGE_TAG="${IMAGE_TAG:-v0.1.0}"
+
+cleanup() {
+    echo ""
+    echo "=== Deployment failed ==="
+    echo "Resources may have been partially created."
+    echo "Run 'infra/scripts/teardown.sh' to clean up."
+    exit 1
+}
+trap cleanup ERR
+
+# Validate required environment variables
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "ERROR: ANTHROPIC_API_KEY environment variable is not set."
+    echo "Export it before running: export ANTHROPIC_API_KEY='your-key-here'"
+    exit 1
+fi
 
 echo "=== SolProbe Deployment ==="
 
-# 1. Terraform: create GKE cluster
+# 1. Terraform: plan and apply GKE cluster
 echo "[1/6] Provisioning GKE cluster with Terraform..."
 cd "$INFRA_DIR/terraform"
 terraform init
-terraform apply -auto-approve
+terraform plan -out=tfplan
+echo ""
+read -r -p "Review the plan above. Proceed with apply? (y/N): " confirm
+if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "Aborting deployment."
+    rm -f tfplan
+    exit 0
+fi
+terraform apply tfplan
+rm -f tfplan
 
 # 2. Configure kubectl
 echo "[2/6] Configuring kubectl..."
 CLUSTER_NAME=$(terraform output -raw cluster_name)
 REGION=$(terraform output -raw region)
-PROJECT_ID=$(terraform output -raw cluster_endpoint | xargs -I{} echo "configured")
 gcloud container clusters get-credentials "$CLUSTER_NAME" --region "$REGION"
 
 # 3. Build and push Docker images
 echo "[3/6] Building and pushing Docker images..."
 cd "$ROOT_DIR"
-docker build -t rutts29/solprobe-backend:latest -f backend/Dockerfile .
-docker build -t rutts29/solprobe-sidecar:latest -f sidecar/Dockerfile .
-docker push rutts29/solprobe-backend:latest
-docker push rutts29/solprobe-sidecar:latest
+docker build -t "rutts29/solprobe-backend:${IMAGE_TAG}" -f backend/Dockerfile .
+docker build -t "rutts29/solprobe-sidecar:${IMAGE_TAG}" -f sidecar/Dockerfile .
+docker push "rutts29/solprobe-backend:${IMAGE_TAG}"
+docker push "rutts29/solprobe-sidecar:${IMAGE_TAG}"
 
 # 4. Create namespace and secrets
 echo "[4/6] Creating namespace and secrets..."
 kubectl create namespace solprobe --dry-run=client -o yaml | kubectl apply -f -
 kubectl create secret generic solprobe-secrets -n solprobe \
-  --from-literal=ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+  --from-env-file=<(echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}") \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic grafana-secret -n solprobe \
+  --from-literal=admin-password="${GRAFANA_ADMIN_PASSWORD:-$(openssl rand -base64 16)}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # 5. Helm install
 echo "[5/6] Installing SolProbe via Helm..."
 helm upgrade --install solprobe "$INFRA_DIR/helm/solprobe" \
   -n solprobe \
-  -f "$INFRA_DIR/helm/solprobe/values.yaml"
+  -f "$INFRA_DIR/helm/solprobe/values.yaml" \
+  --set "backend.image=rutts29/solprobe-backend:${IMAGE_TAG}" \
+  --set "sidecar.image=rutts29/solprobe-sidecar:${IMAGE_TAG}"
 
 # 6. Wait for rollout
 echo "[6/6] Waiting for rollout..."
