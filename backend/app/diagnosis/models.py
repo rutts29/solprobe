@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class EvidenceItem(BaseModel):
@@ -38,6 +38,7 @@ class DiagnosisResult(BaseModel):
 
     diagnosis_id: str
     alert_id: str
+    alert_type: str = Field(default="", description="Original alert type for RAG matching")
     node_id: str
     timestamp_ms: int
     root_cause: str
@@ -50,6 +51,15 @@ class DiagnosisResult(BaseModel):
     latency_ms: int
     status: Literal["completed", "failed", "rate_limited"]
     error: str | None = None
+
+    @model_validator(mode="after")
+    def _check_status_error_consistency(self) -> DiagnosisResult:
+        """Ensure failed/rate_limited results have an error, completed ones don't."""
+        if self.status in ("failed", "rate_limited") and not self.error:
+            raise ValueError(f"status='{self.status}' requires a non-empty error field")
+        if self.status == "completed" and self.error is not None:
+            raise ValueError("status='completed' must not have an error field")
+        return self
 
 
 class DiagnosisRequest(BaseModel):

@@ -100,12 +100,14 @@ class TestDiagnosisAgent:
         assert result.root_cause == "thermal_throttle"
         assert result.confidence == 0.92
         assert result.alert_id == alert.alert_id
+        assert result.alert_type == "thermal_throttle"
         assert result.node_id == alert.node_id
         assert len(result.evidence_chain) == 1
         assert result.recommended_action.action == "reassign_workload"
         assert result.recommended_action.urgency == "immediate"
         assert result.llm_model == "claude-sonnet-4-20250514"
         assert result.latency_ms >= 0
+        assert result.error is None
 
         # Verify it was stored
         assert store.count == 1
@@ -139,6 +141,7 @@ class TestDiagnosisAgent:
         alert2 = _make_alert(node_id="node-1")
         result2 = agent.diagnose(alert2)
         assert result2.status == "rate_limited"
+        assert result2.error is not None
 
     @patch("app.diagnosis.agent.enrich_alert")
     @patch("app.diagnosis.agent.anthropic")
@@ -169,7 +172,7 @@ class TestDiagnosisAgent:
     @patch("app.diagnosis.agent.enrich_alert")
     @patch("app.diagnosis.agent.anthropic")
     def test_api_error_returns_failed(self, mock_anthropic_mod, mock_enrich):
-        """API error returns status=failed with error message."""
+        """API error returns status=failed with sanitized error message."""
         from app.models.alerts import EnrichedAlert
 
         alert = _make_alert()
@@ -187,7 +190,9 @@ class TestDiagnosisAgent:
         result = agent.diagnose(alert)
 
         assert result.status == "failed"
-        assert "API timeout" in result.error
+        assert result.error is not None
+        # Error should be sanitized (type name, not raw message)
+        assert "Exception" in result.error
 
     @patch("app.diagnosis.agent.anthropic")
     def test_no_api_key_returns_failed(self, mock_anthropic_mod):
@@ -201,3 +206,114 @@ class TestDiagnosisAgent:
         alert = _make_alert()
         result = agent.diagnose(alert)
         assert result.status == "failed"
+        assert result.error is not None
+
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
+    def test_malformed_response_no_tool_use(self, mock_anthropic_mod, mock_enrich):
+        """LLM response without tool_use block returns failed."""
+        from app.models.alerts import EnrichedAlert
+
+        alert = _make_alert()
+        enriched = EnrichedAlert(alert=alert, recent_metrics=[], node_history=[], correlated_events=[])
+        mock_enrich.return_value = enriched
+
+        # Response with only a text block, no tool_use
+        text_block = MagicMock()
+        text_block.type = "text"
+        text_block.text = "I cannot diagnose this."
+
+        response = MagicMock()
+        response.content = [text_block]
+        response.model = "claude-sonnet-4-20250514"
+
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = response
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+
+        store = DiagnosisStore()
+        agent = DiagnosisAgent(api_key="test-key", store=store, rate_limiter=DiagnosisRateLimiter())
+        result = agent.diagnose(alert)
+
+        assert result.status == "failed"
+        assert "No submit_diagnosis tool_use block" in result.error
+
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
+    def test_malformed_response_missing_fields(self, mock_anthropic_mod, mock_enrich):
+        """LLM response with missing required fields returns failed."""
+        from app.models.alerts import EnrichedAlert
+
+        alert = _make_alert()
+        enriched = EnrichedAlert(alert=alert, recent_metrics=[], node_history=[], correlated_events=[])
+        mock_enrich.return_value = enriched
+
+        # tool_use block with incomplete data
+        tool_use_block = MagicMock()
+        tool_use_block.type = "tool_use"
+        tool_use_block.name = "submit_diagnosis"
+        tool_use_block.input = {"root_cause": "thermal_throttle"}  # missing other fields
+
+        response = MagicMock()
+        response.content = [tool_use_block]
+        response.model = "claude-sonnet-4-20250514"
+
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = response
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+
+        store = DiagnosisStore()
+        agent = DiagnosisAgent(api_key="test-key", store=store, rate_limiter=DiagnosisRateLimiter())
+        result = agent.diagnose(alert)
+
+        assert result.status == "failed"
+        assert "missing required fields" in result.error
+
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
+    def test_context_preparation_failure(self, mock_anthropic_mod, mock_enrich):
+        """Enrichment failure is reported separately from LLM errors."""
+        mock_enrich.side_effect = RuntimeError("store corrupted")
+
+        mock_client = MagicMock()
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+
+        store = DiagnosisStore()
+        agent = DiagnosisAgent(api_key="test-key", store=store, rate_limiter=DiagnosisRateLimiter())
+        alert = _make_alert()
+        result = agent.diagnose(alert)
+
+        assert result.status == "failed"
+        assert "Context preparation failed" in result.error
+        # LLM should never be called
+        mock_client.messages.create.assert_not_called()
+
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
+    def test_anthropic_rate_limit_error(self, mock_anthropic_mod, mock_enrich):
+        """Anthropic RateLimitError is caught specifically."""
+        import anthropic as real_anthropic
+        from app.models.alerts import EnrichedAlert
+
+        alert = _make_alert()
+        enriched = EnrichedAlert(alert=alert, recent_metrics=[], node_history=[], correlated_events=[])
+        mock_enrich.return_value = enriched
+
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = real_anthropic.RateLimitError(
+            message="rate limited",
+            response=MagicMock(status_code=429),
+            body=None,
+        )
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+        # Wire up actual exception classes so isinstance checks work
+        mock_anthropic_mod.RateLimitError = real_anthropic.RateLimitError
+        mock_anthropic_mod.APITimeoutError = real_anthropic.APITimeoutError
+        mock_anthropic_mod.APIError = real_anthropic.APIError
+
+        store = DiagnosisStore()
+        agent = DiagnosisAgent(api_key="test-key", store=store, rate_limiter=DiagnosisRateLimiter())
+        result = agent.diagnose(alert)
+
+        assert result.status == "failed"
+        assert "rate limit" in result.error.lower()

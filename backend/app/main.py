@@ -140,15 +140,16 @@ async def _prom_gauge_loop() -> None:
 
 
 async def _auto_diagnosis_loop() -> None:
-    """Automatically diagnose CRITICAL alerts that lack a diagnosis."""
+    """Automatically diagnose CRITICAL alerts that lack a successful diagnosis."""
     while True:
         await asyncio.sleep(5)
         try:
             critical_alerts = alert_store.query(severity="CRITICAL", limit=20)
             agent = get_or_create_agent()
             for alert in critical_alerts:
-                # Skip if already diagnosed
-                if diagnosis_store.get_by_alert_id(alert.alert_id) is not None:
+                # Skip only if a completed diagnosis exists; retry failed ones
+                existing = diagnosis_store.get_by_alert_id(alert.alert_id)
+                if existing is not None and existing.status == "completed":
                     continue
                 result = await asyncio.to_thread(agent.diagnose, alert)
                 if result.status == "completed":

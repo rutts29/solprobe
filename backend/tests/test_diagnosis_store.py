@@ -18,32 +18,38 @@ from app.diagnosis.store import DiagnosisStore
 def _make_diagnosis(
     diagnosis_id: str = "diag-1",
     alert_id: str = "alert-1",
+    alert_type: str = "thermal_throttle",
     node_id: str = "node-1",
     root_cause: str = "thermal_throttle",
     status: str = "completed",
 ) -> DiagnosisResult:
-    return DiagnosisResult(
-        diagnosis_id=diagnosis_id,
-        alert_id=alert_id,
-        node_id=node_id,
-        timestamp_ms=int(time.time() * 1000),
-        root_cause=root_cause,
-        confidence=0.9,
-        reasoning="Test reasoning",
-        evidence_chain=[
+    kwargs = {
+        "diagnosis_id": diagnosis_id,
+        "alert_id": alert_id,
+        "alert_type": alert_type,
+        "node_id": node_id,
+        "timestamp_ms": int(time.time() * 1000),
+        "root_cause": root_cause,
+        "confidence": 0.9,
+        "reasoning": "Test reasoning",
+        "evidence_chain": [
             EvidenceItem(metric="gpu_temp_c", value="92", context="Above threshold"),
         ],
-        recommended_action=RecommendedAction(
+        "recommended_action": RecommendedAction(
             action="reassign_workload",
             params={},
             urgency="immediate",
         ),
-        similar_incidents=[],
-        llm_model="claude-sonnet-4-20250514",
-        latency_ms=1000,
-        status=status,
-        error=None,
-    )
+        "similar_incidents": [],
+        "llm_model": "claude-sonnet-4-20250514",
+        "latency_ms": 1000,
+        "status": status,
+    }
+    if status != "completed":
+        kwargs["error"] = "test error"
+    else:
+        kwargs["error"] = None
+    return DiagnosisResult(**kwargs)
 
 
 class TestDiagnosisStore:
@@ -90,7 +96,7 @@ class TestDiagnosisStore:
     def test_query_by_root_cause(self):
         store = DiagnosisStore()
         store.add(_make_diagnosis(diagnosis_id="d1", alert_id="a1", root_cause="thermal_throttle"))
-        store.add(_make_diagnosis(diagnosis_id="d2", alert_id="a2", root_cause="xid_error"))
+        store.add(_make_diagnosis(diagnosis_id="d2", alert_id="a2", root_cause="hardware_fault", alert_type="xid_error"))
         store.add(_make_diagnosis(diagnosis_id="d3", alert_id="a3", root_cause="thermal_throttle"))
         results = store.query(root_cause="thermal_throttle")
         assert len(results) == 2
@@ -102,19 +108,35 @@ class TestDiagnosisStore:
         results = store.query(limit=3)
         assert len(results) == 3
 
-    def test_find_similar(self):
+    def test_find_similar_by_alert_type(self):
+        """find_similar matches on alert_type, not root_cause."""
         store = DiagnosisStore()
-        store.add(_make_diagnosis(diagnosis_id="d1", alert_id="a1", root_cause="thermal_throttle"))
-        store.add(_make_diagnosis(diagnosis_id="d2", alert_id="a2", root_cause="xid_error"))
-        store.add(_make_diagnosis(diagnosis_id="d3", alert_id="a3", root_cause="thermal_throttle"))
+        store.add(_make_diagnosis(
+            diagnosis_id="d1", alert_id="a1",
+            alert_type="thermal_throttle", root_cause="thermal_throttle",
+        ))
+        store.add(_make_diagnosis(
+            diagnosis_id="d2", alert_id="a2",
+            alert_type="xid_error", root_cause="hardware_fault",
+        ))
+        store.add(_make_diagnosis(
+            diagnosis_id="d3", alert_id="a3",
+            alert_type="thermal_throttle", root_cause="power_limit",
+        ))
         similar = store.find_similar("thermal_throttle", limit=3)
         assert len(similar) == 2
-        assert all(s.root_cause == "thermal_throttle" for s in similar)
+        assert all(s.alert_type == "thermal_throttle" for s in similar)
 
     def test_find_similar_excludes_failed(self):
         store = DiagnosisStore()
-        store.add(_make_diagnosis(diagnosis_id="d1", alert_id="a1", root_cause="thermal_throttle", status="completed"))
-        store.add(_make_diagnosis(diagnosis_id="d2", alert_id="a2", root_cause="thermal_throttle", status="failed"))
+        store.add(_make_diagnosis(
+            diagnosis_id="d1", alert_id="a1",
+            alert_type="thermal_throttle", status="completed",
+        ))
+        store.add(_make_diagnosis(
+            diagnosis_id="d2", alert_id="a2",
+            alert_type="thermal_throttle", status="failed",
+        ))
         similar = store.find_similar("thermal_throttle")
         assert len(similar) == 1
 

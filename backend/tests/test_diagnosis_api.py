@@ -25,30 +25,36 @@ from app.stores import AlertStore, MetricsStore, AnomalyStore, JobStore
 def _make_diagnosis(
     diagnosis_id: str = "diag-1",
     alert_id: str = "alert-1",
+    alert_type: str = "thermal_throttle",
     node_id: str = "node-1",
     root_cause: str = "thermal_throttle",
     status: str = "completed",
 ) -> DiagnosisResult:
-    return DiagnosisResult(
-        diagnosis_id=diagnosis_id,
-        alert_id=alert_id,
-        node_id=node_id,
-        timestamp_ms=int(time.time() * 1000),
-        root_cause=root_cause,
-        confidence=0.9,
-        reasoning="Test reasoning",
-        evidence_chain=[
+    kwargs = {
+        "diagnosis_id": diagnosis_id,
+        "alert_id": alert_id,
+        "alert_type": alert_type,
+        "node_id": node_id,
+        "timestamp_ms": int(time.time() * 1000),
+        "root_cause": root_cause,
+        "confidence": 0.9,
+        "reasoning": "Test reasoning",
+        "evidence_chain": [
             EvidenceItem(metric="gpu_temp_c", value="92", context="Above threshold"),
         ],
-        recommended_action=RecommendedAction(
+        "recommended_action": RecommendedAction(
             action="reassign_workload", params={}, urgency="immediate",
         ),
-        similar_incidents=[],
-        llm_model="claude-sonnet-4-20250514",
-        latency_ms=1000,
-        status=status,
-        error=None,
-    )
+        "similar_incidents": [],
+        "llm_model": "claude-sonnet-4-20250514",
+        "latency_ms": 1000,
+        "status": status,
+    }
+    if status != "completed":
+        kwargs["error"] = "test error"
+    else:
+        kwargs["error"] = None
+    return DiagnosisResult(**kwargs)
 
 
 def _make_alert(
@@ -138,13 +144,13 @@ class TestDiagnosisEndpoints:
     async def test_get_diagnoses_filter_root_cause(self, diagnosis_app, diag_client):
         _, _, _, _, _, ds = diagnosis_app
         ds.add(_make_diagnosis(diagnosis_id="d1", alert_id="a1", root_cause="thermal_throttle"))
-        ds.add(_make_diagnosis(diagnosis_id="d2", alert_id="a2", root_cause="xid_error"))
+        ds.add(_make_diagnosis(diagnosis_id="d2", alert_id="a2", root_cause="hardware_fault", alert_type="xid_error"))
 
-        resp = await diag_client.get("/api/v1/diagnoses?root_cause=xid_error")
+        resp = await diag_client.get("/api/v1/diagnoses?root_cause=hardware_fault")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 1
-        assert data[0]["root_cause"] == "xid_error"
+        assert data[0]["root_cause"] == "hardware_fault"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_get_diagnosis_by_id(self, diagnosis_app, diag_client):
@@ -162,7 +168,8 @@ class TestDiagnosisEndpoints:
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("app.api.routes.get_or_create_agent")
-    async def test_post_diagnoses_manual_trigger(self, mock_get_agent, diagnosis_app, diag_client):
+    async def test_post_diagnoses_completed(self, mock_get_agent, diagnosis_app, diag_client):
+        """Successful diagnosis returns 201."""
         _, _, als, _, _, ds = diagnosis_app
         alert = _make_alert(alert_id="alert-99")
         als.add(alert)
@@ -179,6 +186,27 @@ class TestDiagnosisEndpoints:
         )
         assert resp.status_code == 201
         assert resp.json()["diagnosis_id"] == "diag-new"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("app.api.routes.get_or_create_agent")
+    async def test_post_diagnoses_failed_returns_502(self, mock_get_agent, diagnosis_app, diag_client):
+        """Failed diagnosis returns 502, not 201."""
+        _, _, als, _, _, ds = diagnosis_app
+        alert = _make_alert(alert_id="alert-fail")
+        als.add(alert)
+
+        mock_agent = MagicMock()
+        mock_agent.diagnose.return_value = _make_diagnosis(
+            diagnosis_id="diag-fail", alert_id="alert-fail", status="failed",
+        )
+        mock_get_agent.return_value = mock_agent
+
+        resp = await diag_client.post(
+            "/api/v1/diagnoses",
+            json={"alert_id": "alert-fail"},
+        )
+        assert resp.status_code == 502
+        assert resp.json()["status"] == "failed"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_post_diagnoses_alert_not_found(self, diag_client):

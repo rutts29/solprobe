@@ -9,6 +9,7 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
 from app.diagnosis.agent import get_or_create_agent
 from app.diagnosis.models import DiagnosisRequest, DiagnosisResult
@@ -181,8 +182,8 @@ async def get_diagnosis(diagnosis_id: str) -> DiagnosisResult:
     return result
 
 
-@router.post("/diagnoses", response_model=DiagnosisResult, status_code=201)
-async def create_diagnosis(body: DiagnosisRequest) -> DiagnosisResult:
+@router.post("/diagnoses", response_model=DiagnosisResult)
+async def create_diagnosis(body: DiagnosisRequest) -> Response:
     """Manually trigger a diagnosis for a specific alert (bypasses rate limit)."""
     # Find the alert
     all_alerts = alert_store.query(limit=1000)
@@ -196,7 +197,13 @@ async def create_diagnosis(body: DiagnosisRequest) -> DiagnosisResult:
 
     agent = get_or_create_agent()
     result = await asyncio.to_thread(agent.diagnose, target, True)
-    return result
+
+    status_code = 201 if result.status == "completed" else 502
+    return Response(
+        content=result.model_dump_json(),
+        status_code=status_code,
+        media_type="application/json",
+    )
 
 
 @router.get("/alerts/{alert_id}/diagnosis", response_model=DiagnosisResult)

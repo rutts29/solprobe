@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 import uuid
 
 import anthropic
+from anthropic import APIError, APITimeoutError, RateLimitError
 
 from app.diagnosis.models import (
     DiagnosisResult,
@@ -87,17 +89,25 @@ class DiagnosisAgent:
             self._store.add(result)
             return result
 
+        # Phase 1: Context preparation (enrichment + RAG + prompt building)
         try:
-            # Enrich alert with context
             enriched = enrich_alert(alert)
-
-            # Find similar past diagnoses for RAG
             similar_raw = self._store.find_similar(alert.alert_type, limit=3)
-
-            # Build prompt
             user_message = build_user_message(enriched, similar_raw)
+        except Exception as exc:
+            logger.exception("Context preparation failed for alert %s", alert.alert_id)
+            result = self._make_failed_result(
+                diagnosis_id=diagnosis_id,
+                alert=alert,
+                start_ms=start_ms,
+                status="failed",
+                error=f"Context preparation failed: {type(exc).__name__}",
+            )
+            self._store.add(result)
+            return result
 
-            # Call LLM
+        # Phase 2: LLM call with specific error handling
+        try:
             response = self._client.messages.create(
                 model=self._model,
                 max_tokens=1024,
@@ -106,24 +116,58 @@ class DiagnosisAgent:
                 tool_choice={"type": "tool", "name": "submit_diagnosis"},
                 messages=[{"role": "user", "content": user_message}],
             )
-
-            # Parse response
-            result = self._parse_response(
-                response=response,
-                diagnosis_id=diagnosis_id,
-                alert=alert,
-                start_ms=start_ms,
-            )
-
-        except Exception as exc:
-            logger.exception("Diagnosis failed for alert %s", alert.alert_id)
+        except RateLimitError:
+            logger.warning("Anthropic rate limit hit for alert %s", alert.alert_id)
             result = self._make_failed_result(
                 diagnosis_id=diagnosis_id,
                 alert=alert,
                 start_ms=start_ms,
                 status="failed",
-                error=str(exc),
+                error="LLM API rate limit exceeded",
             )
+            self._store.add(result)
+            return result
+        except APITimeoutError:
+            logger.warning("Anthropic API timeout for alert %s", alert.alert_id)
+            result = self._make_failed_result(
+                diagnosis_id=diagnosis_id,
+                alert=alert,
+                start_ms=start_ms,
+                status="failed",
+                error="LLM API request timed out",
+            )
+            self._store.add(result)
+            return result
+        except APIError as exc:
+            logger.exception("Anthropic API error for alert %s", alert.alert_id)
+            result = self._make_failed_result(
+                diagnosis_id=diagnosis_id,
+                alert=alert,
+                start_ms=start_ms,
+                status="failed",
+                error=f"LLM API error: {type(exc).__name__}",
+            )
+            self._store.add(result)
+            return result
+        except Exception as exc:
+            logger.exception("Unexpected error calling LLM for alert %s", alert.alert_id)
+            result = self._make_failed_result(
+                diagnosis_id=diagnosis_id,
+                alert=alert,
+                start_ms=start_ms,
+                status="failed",
+                error=f"Unexpected LLM error: {type(exc).__name__}",
+            )
+            self._store.add(result)
+            return result
+
+        # Phase 3: Parse response
+        result = self._parse_response(
+            response=response,
+            diagnosis_id=diagnosis_id,
+            alert=alert,
+            start_ms=start_ms,
+        )
 
         self._store.add(result)
         return result
@@ -154,6 +198,35 @@ class DiagnosisAgent:
                 error="No submit_diagnosis tool_use block in LLM response",
             )
 
+        # Validate required fields are present — fail rather than fabricating defaults
+        missing_fields = []
+        for field in ("root_cause", "confidence", "reasoning", "evidence_chain", "recommended_action"):
+            if field not in tool_input:
+                missing_fields.append(field)
+        if missing_fields:
+            return self._make_failed_result(
+                diagnosis_id=diagnosis_id,
+                alert=alert,
+                start_ms=start_ms,
+                status="failed",
+                error=f"LLM response missing required fields: {', '.join(missing_fields)}",
+            )
+
+        # Validate recommended_action has required sub-fields
+        action_data = tool_input["recommended_action"]
+        missing_action_fields = []
+        for field in ("action", "urgency"):
+            if field not in action_data:
+                missing_action_fields.append(field)
+        if missing_action_fields:
+            return self._make_failed_result(
+                diagnosis_id=diagnosis_id,
+                alert=alert,
+                start_ms=start_ms,
+                status="failed",
+                error=f"LLM response recommended_action missing: {', '.join(missing_action_fields)}",
+            )
+
         # Build evidence chain
         evidence_chain = [
             EvidenceItem(
@@ -161,25 +234,25 @@ class DiagnosisAgent:
                 value=e.get("value", ""),
                 context=e.get("context", ""),
             )
-            for e in tool_input.get("evidence_chain", [])
+            for e in tool_input["evidence_chain"]
         ]
 
         # Build recommended action
-        action_data = tool_input.get("recommended_action", {})
         recommended_action = RecommendedAction(
-            action=action_data.get("action", "reassign_workload"),
+            action=action_data["action"],
             params=action_data.get("params", {}),
-            urgency=action_data.get("urgency", "soon"),
+            urgency=action_data["urgency"],
         )
 
         return DiagnosisResult(
             diagnosis_id=diagnosis_id,
             alert_id=alert.alert_id,
+            alert_type=alert.alert_type,
             node_id=alert.node_id,
             timestamp_ms=int(time.time() * 1000),
-            root_cause=tool_input.get("root_cause", "unknown"),
-            confidence=tool_input.get("confidence", 0.5),
-            reasoning=tool_input.get("reasoning", ""),
+            root_cause=tool_input["root_cause"],
+            confidence=tool_input["confidence"],
+            reasoning=tool_input["reasoning"],
             evidence_chain=evidence_chain,
             recommended_action=recommended_action,
             similar_incidents=[],
@@ -201,6 +274,7 @@ class DiagnosisAgent:
         return DiagnosisResult(
             diagnosis_id=diagnosis_id,
             alert_id=alert.alert_id,
+            alert_type=alert.alert_type,
             node_id=alert.node_id,
             timestamp_ms=int(time.time() * 1000),
             root_cause="unknown",
@@ -220,13 +294,18 @@ class DiagnosisAgent:
         )
 
 
-# Lazy singleton
+# Thread-safe lazy singleton
 _agent_instance: DiagnosisAgent | None = None
+_agent_lock = threading.Lock()
 
 
 def get_or_create_agent() -> DiagnosisAgent:
-    """Get or create the singleton DiagnosisAgent."""
+    """Get or create the singleton DiagnosisAgent (thread-safe)."""
     global _agent_instance
-    if _agent_instance is None:
-        _agent_instance = DiagnosisAgent()
-    return _agent_instance
+    if _agent_instance is not None:
+        return _agent_instance
+    with _agent_lock:
+        # Double-checked locking
+        if _agent_instance is None:
+            _agent_instance = DiagnosisAgent()
+        return _agent_instance

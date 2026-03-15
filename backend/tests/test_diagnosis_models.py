@@ -85,6 +85,7 @@ class TestDiagnosisResult:
         defaults = {
             "diagnosis_id": "diag-123",
             "alert_id": "alert-456",
+            "alert_type": "thermal_throttle",
             "node_id": "node-1",
             "timestamp_ms": int(time.time() * 1000),
             "root_cause": "thermal_throttle",
@@ -113,6 +114,7 @@ class TestDiagnosisResult:
         restored = DiagnosisResult.model_validate(data)
         assert restored.diagnosis_id == "diag-123"
         assert restored.alert_id == "alert-456"
+        assert restored.alert_type == "thermal_throttle"
         assert restored.confidence == 0.92
         assert restored.status == "completed"
         assert len(restored.evidence_chain) == 1
@@ -130,7 +132,12 @@ class TestDiagnosisResult:
 
     def test_status_values(self):
         for status in ("completed", "failed", "rate_limited"):
-            result = self._make_result(status=status)
+            kwargs = {"status": status}
+            if status != "completed":
+                kwargs["error"] = "some error"
+            else:
+                kwargs["error"] = None
+            result = self._make_result(**kwargs)
             assert result.status == status
 
     def test_invalid_status_rejected(self):
@@ -152,6 +159,21 @@ class TestDiagnosisResult:
         result = self._make_result(similar_incidents=similar)
         assert len(result.similar_incidents) == 1
         assert result.similar_incidents[0].similarity == 0.9
+
+    def test_completed_with_error_rejected(self):
+        """status='completed' must not have an error."""
+        with pytest.raises(ValidationError, match="must not have an error"):
+            self._make_result(status="completed", error="should not be here")
+
+    def test_failed_without_error_rejected(self):
+        """status='failed' requires an error message."""
+        with pytest.raises(ValidationError, match="requires a non-empty error"):
+            self._make_result(status="failed", error=None)
+
+    def test_rate_limited_without_error_rejected(self):
+        """status='rate_limited' requires an error message."""
+        with pytest.raises(ValidationError, match="requires a non-empty error"):
+            self._make_result(status="rate_limited", error=None)
 
 
 class TestDiagnosisRequest:

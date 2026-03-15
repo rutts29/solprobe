@@ -63,13 +63,13 @@ class DiagnosisStore:
         alert_type: str,
         limit: int = 3,
     ) -> list[DiagnosisResult]:
-        """Return completed diagnoses with matching root cause (for RAG)."""
+        """Return completed diagnoses matching the alert type (for RAG)."""
         with self._lock:
             results: list[DiagnosisResult] = []
             for d in reversed(self._diagnoses):
                 if d.status != "completed":
                     continue
-                if d.root_cause == alert_type:
+                if d.alert_type == alert_type:
                     results.append(d)
                     if len(results) >= limit:
                         break
