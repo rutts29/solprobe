@@ -21,6 +21,12 @@ from fastapi import WebSocket, WebSocketDisconnect
 from app.models.alerts import AlertModel
 from app.stores import metrics_store
 
+# Avoid circular import — use TYPE_CHECKING for type hints only
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.diagnosis.models import DiagnosisResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -96,6 +102,27 @@ class ConnectionManager:
             stale: list[_Connection] = []
             for conn in self._connections:
                 if not self._matches_filter(conn, alert.node_id, alert.severity):
+                    continue
+                try:
+                    await conn.ws.send_text(payload)
+                except (WebSocketDisconnect, RuntimeError):
+                    stale.append(conn)
+            for conn in stale:
+                try:
+                    self._connections.remove(conn)
+                except ValueError:
+                    pass
+
+    async def broadcast_diagnosis(self, diagnosis: DiagnosisResult) -> None:
+        """Send a diagnosis result to all connected clients matching the node."""
+        payload = json.dumps({
+            "type": "diagnosis",
+            "data": diagnosis.model_dump(),
+        })
+        async with self._lock:
+            stale: list[_Connection] = []
+            for conn in self._connections:
+                if not self._matches_filter(conn, diagnosis.node_id):
                     continue
                 try:
                     await conn.ws.send_text(payload)
