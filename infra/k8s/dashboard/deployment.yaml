@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solprobe-dashboard
+  namespace: solprobe
+  labels:
+    app: solprobe-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solprobe-dashboard
+  template:
+    metadata:
+      labels:
+        app: solprobe-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: rutts29/solprobe-dashboard:latest
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://solprobe-backend:8000"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
