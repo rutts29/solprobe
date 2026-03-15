@@ -1,0 +1,19 @@
+[Unit]
+Description=SolProbe GPU Metrics Sidecar
+After=network.target nvidia-dcgm.service
+Wants=nvidia-dcgm.service
+
+[Service]
+Type=simple
+User=solprobe
+Group=solprobe
+ExecStart=/opt/solprobe/solprobe-sidecar \
+    --node-id {{ node_id }} \
+    --backend-addr {{ backend_addr }} \
+    --metrics-port {{ sidecar_metrics_port }}
+Restart=always
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

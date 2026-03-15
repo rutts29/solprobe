@@ -1,0 +1,21 @@
+---
+- name: Deploy SolProbe sidecar
+  hosts: gpu_nodes
+  become: true
+  roles:
+    - solprobe-sidecar
+  post_tasks:
+    - name: Verify sidecar is running
+      systemd:
+        name: solprobe-sidecar
+        state: started
+      register: sidecar_status
+
+    - name: Check sidecar metrics endpoint
+      uri:
+        url: "http://localhost:{{ sidecar_metrics_port }}/metrics"
+        return_content: false
+      register: metrics_check
+      retries: 5
+      delay: 2
+      until: metrics_check.status == 200

@@ -1,0 +1,15 @@
+---
+- name: Setup GPU node with NVIDIA drivers
+  hosts: gpu_nodes
+  become: true
+  roles:
+    - nvidia-drivers
+  post_tasks:
+    - name: Verify nvidia-smi
+      command: nvidia-smi
+      register: nvidia_smi_output
+      changed_when: false
+
+    - name: Display GPU info
+      debug:
+        var: nvidia_smi_output.stdout_lines

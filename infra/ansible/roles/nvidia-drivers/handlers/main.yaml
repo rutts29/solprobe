@@ -1,0 +1,5 @@
+---
+- name: Reboot if needed
+  reboot:
+    reboot_timeout: 300
+  when: ansible_facts['kernel'] is defined

@@ -1,0 +1,52 @@
+global:
+  namespace: solprobe
+
+backend:
+  replicas: 2
+  image: rutts29/solprobe-backend:v0.1.0
+  port: 8000
+  grpcPort: 50051
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  anthropicApiKeySecret: solprobe-secrets
+  logLevel: info
+
+sidecar:
+  image: rutts29/solprobe-sidecar:v0.1.0
+  metricsPort: 9100
+  simulate: false
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 250m
+  nodeSelector:
+    solprobe.io/gpu: "true"
+
+dashboard:
+  replicas: 1
+  image: rutts29/solprobe-dashboard:v0.1.0
+  port: 3000
+
+ingress:
+  enabled: true
+  className: nginx
+  host: solprobe.example.com
+  annotations: {}
+  tls:
+    secretName: solprobe-tls
+
+monitoring:
+  prometheus:
+    enabled: true
+    scrapeInterval: 5s
+  grafana:
+    enabled: true
+    storageSize: 1Gi

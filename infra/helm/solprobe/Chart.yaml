@@ -1,0 +1,8 @@
+apiVersion: v2
+name: solprobe
+description: SolProbe - Autonomous fault detection and recovery for distributed AI training
+type: application
+version: 0.1.0
+appVersion: "latest"
+maintainers:
+  - name: rutts29

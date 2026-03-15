@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: solprobe-ingress
+  namespace: solprobe
+  labels:
+    app: solprobe
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - solprobe.example.com
+      secretName: solprobe-tls
+  rules:
+    - host: solprobe.example.com
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: solprobe-backend
+                port:
+                  number: 8000
+          - path: /ws/
+            pathType: Prefix
+            backend:
+              service:
+                name: solprobe-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: solprobe-dashboard
+                port:
+                  number: 3000

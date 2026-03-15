@@ -1,0 +1,15 @@
+---
+- name: Install NVIDIA DCGM
+  hosts: gpu_nodes
+  become: true
+  roles:
+    - dcgm
+  post_tasks:
+    - name: Verify DCGM discovery
+      command: dcgmi discovery -l
+      register: dcgm_output
+      changed_when: false
+
+    - name: Display DCGM info
+      debug:
+        var: dcgm_output.stdout_lines

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: solprobe-backend-config
+  namespace: solprobe
+  labels:
+    app: solprobe-backend
+data:
+  SOLPROBE_LOG_LEVEL: "info"
+  SOLPROBE_METRICS_PORT: "8000"
+  SOLPROBE_GRPC_PORT: "50051"

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: solprobe-backend
+  namespace: {{ include "solprobe.namespace" . }}
+  labels:
+    {{- include "solprobe.backend.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: solprobe-backend
+  ports:
+    - name: http
+      port: {{ .Values.backend.port }}
+      targetPort: http
+    - name: grpc
+      port: {{ .Values.backend.grpcPort }}
+      targetPort: grpc

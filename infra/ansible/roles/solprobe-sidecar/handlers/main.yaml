@@ -1,0 +1,6 @@
+---
+- name: Restart solprobe-sidecar
+  systemd:
+    name: solprobe-sidecar
+    state: restarted
+    daemon_reload: true
