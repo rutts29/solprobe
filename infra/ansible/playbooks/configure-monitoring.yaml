@@ -1,0 +1,38 @@
+---
+- name: Configure monitoring on GPU nodes
+  hosts: gpu_nodes
+  become: true
+  tasks:
+    - name: Install node_exporter
+      apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: true
+      when: ansible_os_family == "Debian"
+
+    - name: Install node_exporter (RHEL)
+      yum:
+        name: node_exporter
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Enable node_exporter service
+      systemd:
+        name: prometheus-node-exporter
+        enabled: true
+        state: started
+
+    - name: Verify sidecar metrics
+      uri:
+        url: "http://localhost:{{ sidecar_metrics_port }}/metrics"
+        return_content: true
+      register: sidecar_metrics
+      retries: 3
+      delay: 2
+      until: sidecar_metrics.status == 200
+
+    - name: Confirm solprobe metrics present
+      assert:
+        that:
+          - "'gpu_temperature' in sidecar_metrics.content or 'solprobe' in sidecar_metrics.content"
+        fail_msg: "SolProbe metrics not found on port {{ sidecar_metrics_port }}"
