@@ -26,6 +26,8 @@ from app.models.metrics import (
     MetricsBatchModel,
     TrainingMetricsModel,
 )
+from app.diagnosis.agent import get_or_create_agent
+from app.diagnosis.store import diagnosis_store
 from app.stores import alert_store, metrics_store
 
 logger = logging.getLogger(__name__)
@@ -224,6 +226,10 @@ class SolProbeServicer(alerts_pb2_grpc.SolProbeServiceServicer):
         if _ws_hub is not None and _event_loop is not None:
             _event_loop.call_soon_threadsafe(_schedule_ws_broadcast, alert_model)
 
+        # Auto-diagnose CRITICAL edge alerts
+        if alert_model.severity == "CRITICAL" and _event_loop is not None:
+            _event_loop.call_soon_threadsafe(_schedule_diagnosis, alert_model)
+
         logger.info(
             "Alert received: %s [%s] from node %s",
             alert_model.alert_type,
@@ -259,6 +265,33 @@ def _schedule_ws_broadcast(alert: AlertModel) -> None:
     """
     if _ws_hub is not None and _event_loop is not None:
         _event_loop.create_task(_ws_hub.broadcast_alert(alert))  # type: ignore[union-attr]
+
+
+def _schedule_diagnosis(alert: AlertModel) -> None:
+    """Schedule auto-diagnosis for a CRITICAL alert.
+
+    Must be called from the asyncio event loop thread
+    (via call_soon_threadsafe).
+    """
+    if _event_loop is not None:
+        _event_loop.create_task(_run_diagnosis_async(alert))
+
+
+async def _run_diagnosis_async(alert: AlertModel) -> None:
+    """Run diagnosis in a thread and broadcast the result."""
+    import asyncio
+
+    # Skip if already diagnosed
+    if diagnosis_store.get_by_alert_id(alert.alert_id) is not None:
+        return
+
+    try:
+        agent = get_or_create_agent()
+        result = await asyncio.to_thread(agent.diagnose, alert)
+        if result.status == "completed" and _ws_hub is not None:
+            await _ws_hub.broadcast_diagnosis(result)  # type: ignore[union-attr]
+    except Exception:
+        logger.exception("Auto-diagnosis failed for alert %s", alert.alert_id)
 
 
 # ---------------------------------------------------------------------------

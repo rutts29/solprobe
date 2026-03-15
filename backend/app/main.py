@@ -23,6 +23,8 @@ from app.api.routes import router as api_router
 from app.detectors.cross_node import run_cross_node_detection
 from app.detectors.diloco import run_diloco_detection
 from app.detectors.zscore import run_zscore_detection
+from app.diagnosis.agent import get_or_create_agent
+from app.diagnosis.store import diagnosis_store
 from app.grpc_server import set_event_loop, set_ws_hub, start_grpc_server, stop_grpc_server
 from app.stores import alert_store, metrics_store
 from app.ws.websocket import metric_summary_loop, websocket_endpoint, ws_manager
@@ -61,6 +63,10 @@ try:
         "solprobe_ws_clients",
         "Active WebSocket clients",
     )
+    TOTAL_DIAGNOSES = Gauge(
+        "solprobe_total_diagnoses",
+        "Total diagnoses in store",
+    )
     _PROM_AVAILABLE = True
 except ImportError:
     _PROM_AVAILABLE = False
@@ -74,6 +80,7 @@ def _update_prom_gauges() -> None:
     CONNECTED_NODES.set(metrics_store.node_count)
     TOTAL_ALERTS.set(alert_store.count)
     WS_CLIENTS.set(ws_manager.active_count)
+    TOTAL_DIAGNOSES.set(diagnosis_store.count)
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +139,24 @@ async def _prom_gauge_loop() -> None:
             logger.exception("Error updating Prometheus gauges")
 
 
+async def _auto_diagnosis_loop() -> None:
+    """Automatically diagnose CRITICAL alerts that lack a diagnosis."""
+    while True:
+        await asyncio.sleep(5)
+        try:
+            critical_alerts = alert_store.query(severity="CRITICAL", limit=20)
+            agent = get_or_create_agent()
+            for alert in critical_alerts:
+                # Skip if already diagnosed
+                if diagnosis_store.get_by_alert_id(alert.alert_id) is not None:
+                    continue
+                result = await asyncio.to_thread(agent.diagnose, alert)
+                if result.status == "completed":
+                    await ws_manager.broadcast_diagnosis(result)
+        except Exception:
+            logger.exception("Error in auto-diagnosis loop")
+
+
 # ---------------------------------------------------------------------------
 # Lifespan (startup + shutdown)
 # ---------------------------------------------------------------------------
@@ -156,6 +181,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     _background_tasks.append(asyncio.create_task(_diloco_loop()))
     _background_tasks.append(asyncio.create_task(metric_summary_loop()))
     _background_tasks.append(asyncio.create_task(_prom_gauge_loop()))
+    _background_tasks.append(asyncio.create_task(_auto_diagnosis_loop()))
 
     logger.info("All background tasks started")
 
@@ -199,6 +225,7 @@ async def health() -> dict:
         "status": "ok",
         "connected_sidecars": metrics_store.node_count,
         "total_alerts": alert_store.count,
+        "total_diagnoses": diagnosis_store.count,
         "ws_clients": ws_manager.active_count,
     }
 

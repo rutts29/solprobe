@@ -5,10 +5,14 @@ All endpoints are async and return JSON via Pydantic serialization.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.diagnosis.agent import get_or_create_agent
+from app.diagnosis.models import DiagnosisRequest, DiagnosisResult
+from app.diagnosis.store import diagnosis_store
 from app.enrichment import enrich_alert
 from app.models.alerts import AlertModel, EnrichedAlert, JobRegistration
 from app.models.metrics import GpuMetricsModel, NodeStatus
@@ -151,3 +155,54 @@ async def get_job(job_id: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     return job
+
+
+# ---------------------------------------------------------------------------
+# Diagnosis endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/diagnoses", response_model=list[DiagnosisResult])
+async def list_diagnoses(
+    node_id: str | None = Query(default=None, description="Filter by node ID"),
+    root_cause: str | None = Query(default=None, description="Filter by root cause"),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> list[DiagnosisResult]:
+    """Return recent diagnoses with optional filters, newest first."""
+    return diagnosis_store.query(node_id=node_id, root_cause=root_cause, limit=limit)
+
+
+@router.get("/diagnoses/{diagnosis_id}", response_model=DiagnosisResult)
+async def get_diagnosis(diagnosis_id: str) -> DiagnosisResult:
+    """Get a single diagnosis by ID."""
+    result = diagnosis_store.get_by_id(diagnosis_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Diagnosis '{diagnosis_id}' not found")
+    return result
+
+
+@router.post("/diagnoses", response_model=DiagnosisResult, status_code=201)
+async def create_diagnosis(body: DiagnosisRequest) -> DiagnosisResult:
+    """Manually trigger a diagnosis for a specific alert (bypasses rate limit)."""
+    # Find the alert
+    all_alerts = alert_store.query(limit=1000)
+    target = None
+    for a in all_alerts:
+        if a.alert_id == body.alert_id:
+            target = a
+            break
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Alert '{body.alert_id}' not found")
+
+    agent = get_or_create_agent()
+    result = await asyncio.to_thread(agent.diagnose, target, True)
+    return result
+
+
+@router.get("/alerts/{alert_id}/diagnosis", response_model=DiagnosisResult)
+async def get_alert_diagnosis(alert_id: str) -> DiagnosisResult:
+    """Get the diagnosis for a specific alert."""
+    result = diagnosis_store.get_by_alert_id(alert_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"No diagnosis found for alert '{alert_id}'")
+    return result
