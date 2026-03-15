@@ -44,15 +44,22 @@ try:
         ["severity"],
     )
 except ImportError:  # pragma: no cover
+    logger.warning("prometheus_client not installed; gRPC Prometheus counters disabled")
     BATCHES_RECEIVED = None  # type: ignore[assignment]
     ALERTS_RECEIVED = None  # type: ignore[assignment]
 
 # Reference to the WebSocket hub and asyncio loop — set at startup by main.py
-_ws_hub: object | None = None
+# Use TYPE_CHECKING to get proper type safety without circular import
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.ws.websocket import ConnectionManager
+
+_ws_hub: ConnectionManager | None = None  # type: ignore[assignment]
 _event_loop: asyncio.AbstractEventLoop | None = None
 
 
-def set_ws_hub(hub: object) -> None:
+def set_ws_hub(hub: ConnectionManager) -> None:  # type: ignore[name-defined]
     """Called by main.py to inject the WebSocket ConnectionManager."""
     global _ws_hub
     _ws_hub = hub
@@ -251,6 +258,15 @@ class SolProbeServicer(alerts_pb2_grpc.SolProbeServiceServicer):
         logger.info("Node unsubscribed: %s", node_id)
 
 
+def _log_task_exception(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+    """Log exceptions from fire-and-forget asyncio tasks."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error("Background broadcast task failed: %s", exc, exc_info=exc)
+
+
 def _schedule_ws_broadcast(alert: AlertModel) -> None:
     """Create an asyncio task to broadcast alert via WS hub.
 
@@ -258,7 +274,8 @@ def _schedule_ws_broadcast(alert: AlertModel) -> None:
     (via call_soon_threadsafe).
     """
     if _ws_hub is not None and _event_loop is not None:
-        _event_loop.create_task(_ws_hub.broadcast_alert(alert))  # type: ignore[union-attr]
+        task = _event_loop.create_task(_ws_hub.broadcast_alert(alert))
+        task.add_done_callback(_log_task_exception)
 
 
 # ---------------------------------------------------------------------------

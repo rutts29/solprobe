@@ -90,72 +90,78 @@ def _update_prom_gauges() -> None:
 _background_tasks: list[asyncio.Task] = []  # type: ignore[type-arg]
 
 
-async def _zscore_loop() -> None:
-    """Run z-score anomaly detection every 10 seconds."""
+async def _detector_loop(
+    name: str,
+    base_interval: float,
+    run_fn,  # noqa: ANN001
+    *,
+    broadcast_fn=None,  # noqa: ANN001
+) -> None:
+    """Generic background detector loop with exponential backoff on failure."""
+    consecutive_failures = 0
     while True:
-        await asyncio.sleep(10)
+        delay = base_interval * min(2 ** consecutive_failures, 30)  # max ~30x base
+        await asyncio.sleep(delay)
         try:
-            findings = run_zscore_detection()
-            if findings:
+            findings = run_fn()
+            consecutive_failures = 0
+            if findings and broadcast_fn:
                 for anomaly in findings:
-                    await ws_manager.broadcast_alert(anomaly.alert)
+                    await broadcast_fn(anomaly.alert)
         except Exception:
-            logger.exception("Error in z-score detector loop")
+            consecutive_failures += 1
+            logger.exception(
+                "Error in %s loop (failure #%d, next retry in %.0fs)",
+                name, consecutive_failures, base_interval * min(2 ** consecutive_failures, 30),
+            )
+
+
+async def _zscore_loop() -> None:
+    await _detector_loop("z-score", 10, run_zscore_detection, broadcast_fn=ws_manager.broadcast_alert)
 
 
 async def _cross_node_loop() -> None:
-    """Run cross-node correlation detection every 15 seconds."""
-    while True:
-        await asyncio.sleep(15)
-        try:
-            findings = run_cross_node_detection()
-            if findings:
-                for anomaly in findings:
-                    await ws_manager.broadcast_alert(anomaly.alert)
-        except Exception:
-            logger.exception("Error in cross-node detector loop")
+    await _detector_loop("cross-node", 15, run_cross_node_detection, broadcast_fn=ws_manager.broadcast_alert)
 
 
 async def _diloco_loop() -> None:
-    """Run DiLoCo-specific detection every 15 seconds."""
-    while True:
-        await asyncio.sleep(15)
-        try:
-            findings = run_diloco_detection()
-            if findings:
-                for anomaly in findings:
-                    await ws_manager.broadcast_alert(anomaly.alert)
-        except Exception:
-            logger.exception("Error in DiLoCo detector loop")
+    await _detector_loop("DiLoCo", 15, run_diloco_detection, broadcast_fn=ws_manager.broadcast_alert)
 
 
 async def _prom_gauge_loop() -> None:
     """Update Prometheus gauges every 5 seconds."""
+    consecutive_failures = 0
     while True:
-        await asyncio.sleep(5)
+        delay = 5 * min(2 ** consecutive_failures, 30)
+        await asyncio.sleep(delay)
         try:
             _update_prom_gauges()
+            consecutive_failures = 0
         except Exception:
-            logger.exception("Error updating Prometheus gauges")
+            consecutive_failures += 1
+            logger.exception("Error updating Prometheus gauges (failure #%d)", consecutive_failures)
 
 
 async def _auto_diagnosis_loop() -> None:
     """Automatically diagnose CRITICAL alerts that lack a successful diagnosis."""
+    consecutive_failures = 0
     while True:
-        await asyncio.sleep(5)
+        delay = 5 * min(2 ** consecutive_failures, 30)
+        await asyncio.sleep(delay)
         try:
             critical_alerts = alert_store.query(severity="CRITICAL", limit=20)
             agent = get_or_create_agent()
             for alert in critical_alerts:
-                # Skip only if a completed diagnosis exists; retry failed ones
                 existing = diagnosis_store.get_by_alert_id(alert.alert_id)
                 if existing is not None and existing.status == "completed":
                     continue
                 result = await asyncio.to_thread(agent.diagnose, alert)
                 if result.status == "completed":
                     await ws_manager.broadcast_diagnosis(result)
+            consecutive_failures = 0
         except Exception:
-            logger.exception("Error in auto-diagnosis loop")
+            consecutive_failures += 1
+            logger.exception("Error in auto-diagnosis loop (failure #%d)", consecutive_failures)
 
 
 # ---------------------------------------------------------------------------
