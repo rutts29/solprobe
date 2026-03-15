@@ -1,0 +1,7 @@
+.git/
+.superpowers/
+.claude/
+sidecar/target/
+backend/.venv/
+backend/__pycache__/
+**/*.pyc

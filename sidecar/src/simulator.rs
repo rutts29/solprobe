@@ -231,3 +231,92 @@ impl Simulator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_no_fault_reasonable_temp() {
+        let mut sim = Simulator::new("test-node".to_string(), None);
+        for _ in 0..10 {
+            let batch = sim.generate();
+            let gpu = &batch.gpu[0];
+            // Normal temp range: sine wave 35-76 + noise, so roughly 30-80
+            assert!(
+                gpu.gpu_temp_c > 25.0 && gpu.gpu_temp_c < 85.0,
+                "Expected temp 25-85, got {}",
+                gpu.gpu_temp_c
+            );
+            assert_eq!(gpu.xid_errors, 0);
+        }
+    }
+
+    #[test]
+    fn test_thermal_throttle_fault() {
+        let mut sim =
+            Simulator::new("test-node".to_string(), Some("thermal_throttle".to_string()));
+        let batch = sim.generate();
+        let gpu = &batch.gpu[0];
+        assert!(
+            gpu.gpu_temp_c > 85.0,
+            "Expected temp > 85 with thermal_throttle fault, got {}",
+            gpu.gpu_temp_c
+        );
+    }
+
+    #[test]
+    fn test_xid_79_fault() {
+        let mut sim = Simulator::new("test-node".to_string(), Some("xid_79".to_string()));
+        let batch = sim.generate();
+        let gpu = &batch.gpu[0];
+        assert_eq!(gpu.xid_errors, 79);
+    }
+
+    #[test]
+    fn test_memory_pressure_fault() {
+        let mut sim =
+            Simulator::new("test-node".to_string(), Some("memory_pressure".to_string()));
+        let batch = sim.generate();
+        let gpu = &batch.gpu[0];
+        let mem_pct = gpu.fb_used_mb / (gpu.fb_used_mb + gpu.fb_free_mb) * 100.0;
+        assert!(
+            mem_pct > 95.0,
+            "Expected memory > 95%, got {:.1}%",
+            mem_pct
+        );
+    }
+
+    #[test]
+    fn test_gradient_explosion_fault() {
+        let mut sim =
+            Simulator::new("test-node".to_string(), Some("gradient_explosion".to_string()));
+        let batch = sim.generate();
+        let training = batch.training.unwrap();
+        assert!(
+            training.gradient_norm > 100.0,
+            "Expected gradient_norm > 100 with gradient_explosion, got {}",
+            training.gradient_norm
+        );
+    }
+
+    #[test]
+    fn test_nccl_timeout_returns_zeros() {
+        let mut sim =
+            Simulator::new("test-node".to_string(), Some("nccl_timeout".to_string()));
+        let batch = sim.generate();
+        let gpu = &batch.gpu[0];
+        assert_eq!(gpu.gpu_temp_c, 0.0);
+        assert_eq!(gpu.gpu_utilization_pct, 0.0);
+        assert_eq!(gpu.power_usage_w, 0.0);
+    }
+
+    #[test]
+    fn test_batch_has_all_components() {
+        let mut sim = Simulator::new("test-node".to_string(), None);
+        let batch = sim.generate();
+        assert_eq!(batch.gpu.len(), 1);
+        assert!(batch.training.is_some());
+        assert!(batch.diloco.is_some());
+    }
+}

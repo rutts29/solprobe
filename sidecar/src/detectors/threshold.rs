@@ -90,6 +90,142 @@ impl ThresholdDetector {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ThresholdConfig;
+    use crate::detectors::Detector;
+    use crate::proto::solprobe::v1::{GpuMetrics, MetricsBatch, TrainingMetrics};
+
+    fn default_gpu(node_id: &str) -> GpuMetrics {
+        GpuMetrics {
+            node_id: node_id.to_string(),
+            gpu_index: 0,
+            gpu_model: "T4".to_string(),
+            timestamp_ms: 0,
+            gpu_temp_c: 50.0,
+            memory_temp_c: 45.0,
+            gpu_utilization_pct: 80.0,
+            mem_copy_utilization_pct: 40.0,
+            fb_used_mb: 8000.0,
+            fb_free_mb: 8384.0,
+            power_usage_w: 55.0,
+            xid_errors: 0,
+            ecc_sbe_count: 0,
+            ecc_dbe_count: 0,
+            clock_throttle_reasons: 0,
+            pcie_replay_counter: 0,
+            pcie_tx_bytes_per_sec: 1e9,
+            pcie_rx_bytes_per_sec: 1e9,
+            sm_active_pct: 75.0,
+            tensor_active_pct: 60.0,
+            retired_pages_sbe: 0,
+            retired_pages_dbe: 0,
+            remapped_rows_correctable: 0,
+            remapped_rows_uncorrectable: 0,
+            row_remap_failure: false,
+        }
+    }
+
+    fn default_training(node_id: &str) -> TrainingMetrics {
+        TrainingMetrics {
+            node_id: node_id.to_string(),
+            job_id: "test-job".to_string(),
+            timestamp_ms: 0,
+            step: 100,
+            loss: 1.0,
+            gradient_norm: 1.0,
+            learning_rate: 3e-4,
+            throughput_tps: 5000.0,
+            mfu_pct: 45.0,
+        }
+    }
+
+    fn make_batch(gpu: GpuMetrics, training: Option<TrainingMetrics>) -> MetricsBatch {
+        MetricsBatch {
+            gpu: vec![gpu],
+            training,
+            diloco: None,
+        }
+    }
+
+    #[test]
+    fn test_temp_above_critical_fires_alert() {
+        let detector = ThresholdDetector::new(ThresholdConfig::default());
+        let mut gpu = default_gpu("node-1");
+        gpu.gpu_temp_c = 90.0; // above critical (85)
+        let batch = make_batch(gpu, None);
+        let alerts = detector.check(&batch);
+        assert!(!alerts.is_empty());
+        let alert = &alerts[0];
+        assert_eq!(alert.severity, i32::from(Severity::Critical));
+        assert_eq!(alert.alert_type, i32::from(AlertType::ThermalThrottle));
+    }
+
+    #[test]
+    fn test_temp_below_warn_no_alert() {
+        let detector = ThresholdDetector::new(ThresholdConfig::default());
+        let mut gpu = default_gpu("node-1");
+        gpu.gpu_temp_c = 60.0; // well below warn (80)
+        let batch = make_batch(gpu, None);
+        let alerts = detector.check(&batch);
+        // No thermal alerts
+        let thermal: Vec<_> = alerts
+            .iter()
+            .filter(|a| a.alert_type == i32::from(AlertType::ThermalThrottle))
+            .collect();
+        assert!(thermal.is_empty());
+    }
+
+    #[test]
+    fn test_xid_79_fires_alert() {
+        let detector = ThresholdDetector::new(ThresholdConfig::default());
+        let mut gpu = default_gpu("node-1");
+        gpu.xid_errors = 79;
+        let batch = make_batch(gpu, None);
+        let alerts = detector.check(&batch);
+        let xid_alerts: Vec<_> = alerts
+            .iter()
+            .filter(|a| a.alert_type == i32::from(AlertType::XidError))
+            .collect();
+        assert_eq!(xid_alerts.len(), 1);
+        assert_eq!(xid_alerts[0].severity, i32::from(Severity::Critical));
+    }
+
+    #[test]
+    fn test_gradient_explosion_fires_alert() {
+        let detector = ThresholdDetector::new(ThresholdConfig::default());
+        let gpu = default_gpu("node-1");
+        let mut training = default_training("node-1");
+        training.gradient_norm = 150.0; // above critical (100)
+        let batch = make_batch(gpu, Some(training));
+        let alerts = detector.check(&batch);
+        let grad_alerts: Vec<_> = alerts
+            .iter()
+            .filter(|a| a.alert_type == i32::from(AlertType::GradientExplosion))
+            .collect();
+        assert_eq!(grad_alerts.len(), 1);
+        assert_eq!(grad_alerts[0].severity, i32::from(Severity::Critical));
+    }
+
+    #[test]
+    fn test_memory_pressure_critical() {
+        let detector = ThresholdDetector::new(ThresholdConfig::default());
+        let mut gpu = default_gpu("node-1");
+        // 96% memory usage: used=15728.64, free=655.36 (total=16384)
+        gpu.fb_used_mb = 16384.0 * 0.96;
+        gpu.fb_free_mb = 16384.0 - gpu.fb_used_mb;
+        let batch = make_batch(gpu, None);
+        let alerts = detector.check(&batch);
+        let mem_alerts: Vec<_> = alerts
+            .iter()
+            .filter(|a| a.alert_type == i32::from(AlertType::MemoryPressure))
+            .collect();
+        assert_eq!(mem_alerts.len(), 1);
+        assert_eq!(mem_alerts[0].severity, i32::from(Severity::Critical));
+    }
+}
+
 impl Detector for ThresholdDetector {
     fn check(&self, batch: &MetricsBatch) -> Vec<Alert> {
         let mut alerts = Vec::new();
