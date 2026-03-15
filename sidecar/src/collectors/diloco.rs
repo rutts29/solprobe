@@ -18,6 +18,7 @@ use std::path::PathBuf;
 ///
 /// Note: The spec says 42 bytes, but with correct field sizes it is 46.
 /// We accept files >= 42 bytes for backward compatibility.
+#[allow(dead_code)]
 const DILOCO_RECORD_SIZE: usize = 46;
 const DILOCO_MIN_SIZE: usize = 42;
 

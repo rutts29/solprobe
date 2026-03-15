@@ -13,6 +13,8 @@ use tokio::signal;
 use tokio::sync::watch;
 
 use crate::collectors::dcgm::DcgmCollector;
+use crate::collectors::diloco::DiLoCoMetricsReader;
+use crate::collectors::training::TrainingMetricsReader;
 use crate::collectors::MetricCollector;
 use crate::config::SidecarConfig;
 use crate::detectors::threshold::ThresholdDetector;
@@ -50,14 +52,20 @@ pub struct Args {
 }
 
 /// Wrapper that adapts the Simulator into the MetricCollector trait.
+/// Also reads from mmap files written by PyTorch callbacks, giving mmap
+/// data priority over simulator-generated training/diloco metrics.
 struct SimulatorCollector {
     sim: Mutex<Simulator>,
+    training_reader: TrainingMetricsReader,
+    diloco_reader: DiLoCoMetricsReader,
 }
 
 impl SimulatorCollector {
     fn new(node_id: String, inject_fault: Option<String>) -> Self {
         Self {
-            sim: Mutex::new(Simulator::new(node_id, inject_fault)),
+            sim: Mutex::new(Simulator::new(node_id.clone(), inject_fault)),
+            training_reader: TrainingMetricsReader::new(node_id.clone()),
+            diloco_reader: DiLoCoMetricsReader::new(node_id),
         }
     }
 }
@@ -77,11 +85,25 @@ impl MetricCollector for SimulatorCollector {
         >,
     > {
         Box::pin(async {
-            let batch = self
+            let mut batch = self
                 .sim
                 .lock()
                 .map_err(|e| collectors::CollectorError::Other(format!("lock poisoned: {e}")))?
                 .generate();
+
+            // Override with mmap data when available (real training process running)
+            if let Some(training) = self.training_reader.read() {
+                tracing::debug!("Read training metrics from mmap (step={})", training.step);
+                batch.training = Some(training);
+            }
+            if let Some(diloco) = self.diloco_reader.read() {
+                tracing::debug!(
+                    "Read DiLoCo metrics from mmap (inner_step={})",
+                    diloco.inner_step
+                );
+                batch.diloco = Some(diloco);
+            }
+
             Ok(batch)
         })
     }
