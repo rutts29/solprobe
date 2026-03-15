@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import type { WebSocketMessage, AlertModel, NodeStatus, DiagnosisResult } from "./types";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/stream";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || `${typeof window !== "undefined" ? (window.location.protocol === "https:" ? "wss:" : "ws:") + "//" + window.location.host : "ws://localhost:3000"}/ws/stream`;
 const MAX_RECONNECT_DELAY = 30000;
 
 interface WebSocketState {

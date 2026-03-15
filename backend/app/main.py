@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 from app.api.routes import router as api_router
@@ -218,6 +219,14 @@ app = FastAPI(
     version="0.1.0",
     description="Autonomous fault detection and recovery for distributed GPU training",
     lifespan=lifespan,
+)
+
+# CORS — allow dashboard dev server and common local origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include REST routes
