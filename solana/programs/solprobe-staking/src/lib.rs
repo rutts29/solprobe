@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("6KwGEfxmPQjYR7iyDrLQcvSk9xAyNPHBuWdUYEiWMGfR");
+declare_id!("2ycoqghPYE3PSmFB9T1cmQNPRWhdvv76hhNR6HKAs3rG");
 
 #[program]
 pub mod solprobe_staking {

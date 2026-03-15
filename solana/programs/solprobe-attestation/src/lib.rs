@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("CBx4v7NFTMbiigjYxCckgany73xH9tGFJL2PAMZcvn4n");
 
 #[program]
 pub mod solprobe_attestation {

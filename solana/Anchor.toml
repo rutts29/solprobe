@@ -6,16 +6,16 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-solprobe_attestation = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
-solprobe_escrow = "HmbTLCmaGtYhSJaoxkmkiQuogZwkN5x1hKXEDoN6BqeN"
-solprobe_reputation = "2YPzTvGkQkR5G8vLPBm2cfDXfMkYkQwgNANjKdW4tSMc"
-solprobe_staking = "6KwGEfxmPQjYR7iyDrLQcvSk9xAyNPHBuWdUYEiWMGfR"
+solprobe_attestation = "CBx4v7NFTMbiigjYxCckgany73xH9tGFJL2PAMZcvn4n"
+solprobe_escrow = "12nsJukP6sMwmabwqXn8ScqXGbZcryDVC49hiWDkwzwz"
+solprobe_reputation = "BQkkoW7sNR5fjKJoC1KhPEC6cHU2pEvb4xN49B16s2L7"
+solprobe_staking = "2ycoqghPYE3PSmFB9T1cmQNPRWhdvv76hhNR6HKAs3rG"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("HmbTLCmaGtYhSJaoxkmkiQuogZwkN5x1hKXEDoN6BqeN");
+declare_id!("12nsJukP6sMwmabwqXn8ScqXGbZcryDVC49hiWDkwzwz");
 
 const MAX_JOB_ID_LEN: usize = 32;
 const MAX_WORKERS: usize = 10;
@@ -78,11 +78,23 @@ pub mod solprobe_escrow {
             .ok_or(EscrowError::Overflow)?;
 
         // Transfer from vault to worker via PDA signer
-        let vault = &ctx.accounts.vault;
-        let worker_info = &ctx.accounts.worker;
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            b"escrow_vault",
+            _job_id.as_bytes(),
+            &[ctx.bumps.vault],
+        ]];
 
-        **vault.to_account_info().try_borrow_mut_lamports()? -= amount;
-        **worker_info.to_account_info().try_borrow_mut_lamports()? += amount;
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.worker.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+        )?;
 
         Ok(())
     }
@@ -113,11 +125,23 @@ pub mod solprobe_escrow {
             .ok_or(EscrowError::Overflow)?;
 
         // Transfer from vault back to creator
-        let vault = &ctx.accounts.vault;
-        let creator = &ctx.accounts.creator;
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            b"escrow_vault",
+            _job_id.as_bytes(),
+            &[ctx.bumps.vault],
+        ]];
 
-        **vault.to_account_info().try_borrow_mut_lamports()? -= amount;
-        **creator.to_account_info().try_borrow_mut_lamports()? += amount;
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.vault.to_account_info(),
+                    to: ctx.accounts.creator.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+        )?;
 
         Ok(())
     }
@@ -129,13 +153,26 @@ pub mod solprobe_escrow {
         escrow.status = JobStatus::Completed;
 
         // Reclaim any remaining SOL from vault back to creator
-        let vault = &ctx.accounts.vault;
-        let creator = &ctx.accounts.creator;
-        let remaining = vault.to_account_info().lamports();
+        let remaining = ctx.accounts.vault.to_account_info().lamports();
 
         if remaining > 0 {
-            **vault.to_account_info().try_borrow_mut_lamports()? -= remaining;
-            **creator.to_account_info().try_borrow_mut_lamports()? += remaining;
+            let signer_seeds: &[&[&[u8]]] = &[&[
+                b"escrow_vault",
+                _job_id.as_bytes(),
+                &[ctx.bumps.vault],
+            ]];
+
+            system_program::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.system_program.to_account_info(),
+                    system_program::Transfer {
+                        from: ctx.accounts.vault.to_account_info(),
+                        to: ctx.accounts.creator.to_account_info(),
+                    },
+                    signer_seeds,
+                ),
+                remaining,
+            )?;
         }
 
         Ok(())
