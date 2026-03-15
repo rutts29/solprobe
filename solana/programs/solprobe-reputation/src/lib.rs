@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("2YPzTvGkQkR5G8vLPBm2cfDXfMkYkQwgNANjKdW4tSMc");
+declare_id!("BQkkoW7sNR5fjKJoC1KhPEC6cHU2pEvb4xN49B16s2L7");
 
 #[program]
 pub mod solprobe_reputation {
