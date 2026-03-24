@@ -1,7 +1,6 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { RecommendedAction } from "@/lib/types";
 
@@ -40,9 +39,6 @@ export function ActionPanel({ action }: ActionPanelProps) {
           </div>
         )}
 
-        <Button disabled className="w-full" title="Will be wired in SP-5">
-          Apply Fix (coming in SP-5)
-        </Button>
       </CardContent>
     </Card>
   );

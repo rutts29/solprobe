@@ -9,22 +9,29 @@ export function useNodes(refreshInterval = 5000) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
     try {
       const data = await fetchNodes();
+      if (signal?.aborted) return;
       setNodes(data);
       setError(null);
     } catch (e) {
+      if (signal?.aborted) return;
       setError(e instanceof Error ? e.message : "Failed to fetch nodes");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, refreshInterval);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    refresh(controller.signal);
+    const interval = setInterval(() => refresh(controller.signal), refreshInterval);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [refresh, refreshInterval]);
 
   return { nodes, loading, error, refresh };

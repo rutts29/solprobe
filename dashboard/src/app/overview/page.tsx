@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { HealthCards } from "@/components/overview/health-cards";
 import { ClusterSummary } from "@/components/overview/cluster-summary";
 import { RecentAlerts } from "@/components/overview/recent-alerts";
@@ -34,7 +34,7 @@ export default function OverviewPage() {
   useRealtime(ws.subscribe, { onAlert });
 
   // Compute avg GPU util from latest_metrics (array per node)
-  const avgGpuUtil = (() => {
+  const avgGpuUtil = useMemo(() => {
     const gpuUtils: number[] = [];
     for (const n of nodes) {
       for (const m of n.latest_metrics) {
@@ -42,7 +42,7 @@ export default function OverviewPage() {
       }
     }
     return gpuUtils.length > 0 ? gpuUtils.reduce((a, b) => a + b, 0) / gpuUtils.length : 0;
-  })();
+  }, [nodes]);
 
   return (
     <div className="space-y-6">

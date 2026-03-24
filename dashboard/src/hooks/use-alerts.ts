@@ -10,6 +10,7 @@ export function useAlerts(params?: { severity?: string; node_id?: string; limit?
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await fetchAlerts(params);
       setAlerts(data);

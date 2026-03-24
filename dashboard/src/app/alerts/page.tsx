@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AlertTimeline } from "@/components/alerts/alert-timeline";
 import { AlertDetail } from "@/components/alerts/alert-detail";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +30,10 @@ export default function AlertsPage() {
   );
 
   useRealtime(ws.subscribe, { onAlert });
+
+  useEffect(() => {
+    setSelectedAlert(null);
+  }, [severity]);
 
   return (
     <div className="space-y-6">
