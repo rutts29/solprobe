@@ -1,3 +1,4 @@
+pub mod apple_silicon;
 pub mod dcgm;
 pub mod diloco;
 pub mod training;

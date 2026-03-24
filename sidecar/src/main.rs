@@ -12,6 +12,7 @@ use clap::Parser;
 use tokio::signal;
 use tokio::sync::watch;
 
+use crate::collectors::apple_silicon::AppleSiliconCollector;
 use crate::collectors::dcgm::DcgmCollector;
 use crate::collectors::diloco::DiLoCoMetricsReader;
 use crate::collectors::training::TrainingMetricsReader;
@@ -29,6 +30,10 @@ pub struct Args {
     /// Run in simulation mode (no real GPU required)
     #[arg(long)]
     simulate: bool,
+
+    /// Use Apple Silicon GPU metrics via IOKit (macOS only)
+    #[arg(long)]
+    apple_gpu: bool,
 
     /// Inject a fault type for testing: thermal_throttle, nccl_timeout, gradient_explosion, xid_79, memory_pressure
     #[arg(long)]
@@ -133,6 +138,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             args.node_id.clone(),
             args.inject_fault.clone(),
         ))
+    } else if args.apple_gpu {
+        tracing::info!("Running in APPLE SILICON mode (ioreg GPU metrics)");
+        Box::new(AppleSiliconCollector::new(args.node_id.clone()))
     } else {
         tracing::info!("Running in DCGM mode (requires GPU)");
         Box::new(DcgmCollector::new())
