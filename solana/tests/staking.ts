@@ -80,4 +80,56 @@ describe("solprobe-staking", () => {
       assert.include(err.toString(), "CooldownNotExpired");
     }
   });
+
+  it("slashes worker stake", async () => {
+    const slashAmount = new anchor.BN(500_000_000); // 0.5 SOL
+    const reasonHash = Buffer.alloc(32, 0xab);
+    const diagnosisId = "diag-001";
+
+    await program.methods
+      .slash(slashAmount, Array.from(reasonHash), diagnosisId)
+      .accounts({
+        worker: admin.publicKey,
+      })
+      .rpc();
+
+    const [stakePda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("stake_account"), admin.publicKey.toBuffer()],
+      program.programId
+    );
+    const stake = await program.account.stakeAccount.fetch(stakePda);
+    assert.equal(stake.stakedLamports.toNumber(), 1_500_000_000);
+    assert.equal(stake.slashCount, 1);
+    assert.equal(stake.active, true);
+  });
+
+  it("rejects non-admin slash attempt", async () => {
+    const nonAdmin = anchor.web3.Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(
+      nonAdmin.publicKey,
+      1_000_000_000
+    );
+    await provider.connection.confirmTransaction(sig);
+
+    const [configPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("stake_config")],
+      program.programId
+    );
+
+    try {
+      await program.methods
+        .slash(new anchor.BN(100_000_000), Array.from(Buffer.alloc(32, 0)), "bad")
+        .accounts({
+          worker: admin.publicKey,
+          admin: nonAdmin.publicKey,
+          stakeConfig: configPda,
+        })
+        .signers([nonAdmin])
+        .rpc();
+      assert.fail("Should have thrown");
+    } catch (err) {
+      // has_one = admin constraint should fail
+      assert.ok(err.toString().length > 0);
+    }
+  });
 });

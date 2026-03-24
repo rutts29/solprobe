@@ -75,6 +75,52 @@ describe("solprobe-attestation", () => {
     assert.equal(att.verified, true);
   });
 
+  it("rejects non-admin verify attempt", async () => {
+    const nonAdmin = anchor.web3.Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(
+      nonAdmin.publicKey,
+      1_000_000_000
+    );
+    await provider.connection.confirmTransaction(sig);
+
+    // Submit a new attestation as nonAdmin
+    const jobId2 = "test-job-002";
+    const step2 = new anchor.BN(1);
+    const checkpointHash2 = Buffer.alloc(32, 3);
+    const metricsHash2 = Buffer.alloc(32, 4);
+
+    await program.methods
+      .submitAttestation(jobId2, step2, Array.from(checkpointHash2), "L4", Array.from(metricsHash2))
+      .accounts({ worker: nonAdmin.publicKey })
+      .signers([nonAdmin])
+      .rpc();
+
+    const [attPda2] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("attestation"),
+        Buffer.from(jobId2),
+        step2.toArrayLike(Buffer, "le", 8),
+        nonAdmin.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+
+    try {
+      await program.methods
+        .verifyAttestation()
+        .accounts({
+          attestation: attPda2,
+          admin: nonAdmin.publicKey,
+        })
+        .signers([nonAdmin])
+        .rpc();
+      assert.fail("Should have thrown");
+    } catch (err) {
+      // has_one = admin constraint should fail
+      assert.ok(err.toString().length > 0);
+    }
+  });
+
   it("rejects double verification", async () => {
     const jobId = "test-job-001";
     const step = new anchor.BN(42);

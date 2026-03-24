@@ -50,15 +50,19 @@ pub mod solprobe_staking {
 
         let stake_account = &mut ctx.accounts.stake_account;
         stake_account.worker = ctx.accounts.worker.key();
-        stake_account.staked_lamports = stake_account.staked_lamports.checked_add(amount).unwrap();
+        stake_account.staked_lamports = stake_account.staked_lamports.checked_add(amount).ok_or(StakingError::Overflow)?;
         stake_account.staked_at = clock.unix_timestamp;
         stake_account.locked_until = clock
             .unix_timestamp
             .checked_add(config.cooldown_seconds)
-            .unwrap();
+            .ok_or(StakingError::Overflow)?;
         stake_account.active = true;
         stake_account.bump = ctx.bumps.stake_account;
 
+        emit!(Staked {
+            worker: ctx.accounts.worker.key(),
+            amount,
+        });
         Ok(())
     }
 
@@ -75,6 +79,8 @@ pub mod solprobe_staking {
 
         let stake_account = &mut ctx.accounts.stake_account;
         require!(stake_account.active, StakingError::StakeNotActive);
+
+        let amount = std::cmp::min(amount, stake_account.staked_lamports);
 
         let clock = Clock::get()?;
         let config = &ctx.accounts.stake_config;
@@ -100,17 +106,21 @@ pub mod solprobe_staking {
         )?;
 
         stake_account.staked_lamports = stake_account.staked_lamports.saturating_sub(amount);
-        stake_account.slash_count = stake_account.slash_count.checked_add(1).unwrap();
+        stake_account.slash_count = stake_account.slash_count.checked_add(1).ok_or(StakingError::Overflow)?;
         stake_account.locked_until = clock
             .unix_timestamp
             .checked_add(config.cooldown_seconds)
-            .unwrap();
+            .ok_or(StakingError::Overflow)?;
 
         // Deactivate if fully slashed
         if stake_account.staked_lamports == 0 {
             stake_account.active = false;
         }
 
+        emit!(Slashed {
+            worker: ctx.accounts.worker.key(),
+            amount,
+        });
         Ok(())
     }
 
@@ -149,6 +159,10 @@ pub mod solprobe_staking {
         stake_account.staked_lamports = 0;
         stake_account.active = false;
 
+        emit!(Unstaked {
+            worker: ctx.accounts.worker.key(),
+            amount,
+        });
         Ok(())
     }
 
@@ -322,6 +336,26 @@ pub struct StakeAccount {
     pub bump: u8,
 }
 
+// ── Events ──────────────────────────────────────────────────────────────────
+
+#[event]
+pub struct Staked {
+    pub worker: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct Slashed {
+    pub worker: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct Unstaked {
+    pub worker: Pubkey,
+    pub amount: u64,
+}
+
 // ── Errors ──────────────────────────────────────────────────────────────────
 
 #[error_code]
@@ -338,4 +372,6 @@ pub enum StakingError {
     InvalidSlashPercentage,
     #[msg("Cooldown seconds must be non-negative")]
     InvalidCooldown,
+    #[msg("Arithmetic overflow")]
+    Overflow,
 }

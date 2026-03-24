@@ -40,6 +40,12 @@ pub mod solprobe_attestation {
         attestation.timestamp = clock.unix_timestamp;
         attestation.verified = false;
         attestation.bump = ctx.bumps.attestation;
+
+        emit!(AttestationSubmitted {
+            worker: ctx.accounts.worker.key(),
+            job_id: attestation.job_id.clone(),
+            step: attestation.step,
+        });
         Ok(())
     }
 
@@ -58,6 +64,12 @@ pub mod solprobe_attestation {
         );
 
         attestation.verified = true;
+
+        emit!(AttestationVerified {
+            worker: attestation.worker,
+            job_id: attestation.job_id.clone(),
+            step: attestation.step,
+        });
         Ok(())
     }
 }
@@ -142,6 +154,20 @@ pub struct Attestation {
     pub timestamp: i64,
     pub verified: bool,
     pub bump: u8,
+}
+
+#[event]
+pub struct AttestationSubmitted {
+    pub worker: Pubkey,
+    pub job_id: String,
+    pub step: u64,
+}
+
+#[event]
+pub struct AttestationVerified {
+    pub worker: Pubkey,
+    pub job_id: String,
+    pub step: u64,
 }
 
 #[error_code]
