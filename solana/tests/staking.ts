@@ -128,8 +128,8 @@ describe("solprobe-staking", () => {
         .rpc();
       assert.fail("Should have thrown");
     } catch (err) {
-      // has_one = admin constraint should fail
-      assert.ok(err.toString().length > 0);
+      // has_one = admin constraint should produce ConstraintHasOne error
+      assert.include(err.toString(), "ConstraintHasOne");
     }
   });
 });

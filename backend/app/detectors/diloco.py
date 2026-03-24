@@ -236,7 +236,10 @@ def run_diloco_detection() -> list[AnomalyModel]:
         prev_outer = _last_outer_step.get(node_id, -1)
 
         if current_outer < prev_outer:
-            # Node restarted — reset tracking
+            logger.warning(
+                "DiLoCo outer_step regression (possible restart): node=%s current=%d prev=%d",
+                node_id, current_outer, prev_outer,
+            )
             _last_outer_step[node_id] = current_outer
             continue
 

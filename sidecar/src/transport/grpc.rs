@@ -69,6 +69,7 @@ impl GrpcTransport {
     pub async fn try_connect(&mut self) -> bool {
         if let Some(last) = self.last_connect_attempt {
             if last.elapsed() < Duration::from_secs(5) {
+                tracing::trace!("Reconnect throttled, last attempt was {:?} ago", last.elapsed());
                 return false;
             }
         }

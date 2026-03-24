@@ -122,6 +122,10 @@ def run_zscore_detection() -> list[AnomalyModel]:
                     dedup_key = (node_id, alert_type)
                     now = time.time()
                     if dedup_key in _last_alerted and (now - _last_alerted[dedup_key]) < _DEDUP_COOLDOWN_SECONDS:
+                        logger.debug(
+                            "Z-score alert suppressed (dedup): node=%s type=%s cooldown_remaining=%.1fs",
+                            node_id, alert_type, _DEDUP_COOLDOWN_SECONDS - (now - _last_alerted[dedup_key]),
+                        )
                         continue
                     _last_alerted[dedup_key] = now
                     alert, anomaly = _make_alert(node_id, field, z, window)
@@ -142,6 +146,10 @@ def run_zscore_detection() -> list[AnomalyModel]:
                     dedup_key = (node_id, alert_type)
                     now = time.time()
                     if dedup_key in _last_alerted and (now - _last_alerted[dedup_key]) < _DEDUP_COOLDOWN_SECONDS:
+                        logger.debug(
+                            "Z-score alert suppressed (dedup): node=%s type=%s cooldown_remaining=%.1fs",
+                            node_id, alert_type, _DEDUP_COOLDOWN_SECONDS - (now - _last_alerted[dedup_key]),
+                        )
                         continue
                     _last_alerted[dedup_key] = now
                     alert, anomaly = _make_alert(node_id, field, z, window)
@@ -152,5 +160,11 @@ def run_zscore_detection() -> list[AnomalyModel]:
                         "Z-score alert: node=%s field=%s z=%.2f window=%dmin",
                         node_id, field, z, window,
                     )
+
+    # Evict stale dedup entries to prevent unbounded growth
+    cutoff = time.time() - _DEDUP_COOLDOWN_SECONDS * 2
+    expired = [k for k, v in _last_alerted.items() if v < cutoff]
+    for k in expired:
+        del _last_alerted[k]
 
     return findings

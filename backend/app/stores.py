@@ -296,7 +296,8 @@ class JobStore:
                 "node_ids": node_ids,
             }
             while len(self._jobs) > self._max_size:
-                self._jobs.popitem(last=False)
+                evicted_id, _ = self._jobs.popitem(last=False)
+                logger.warning("JobStore evicting oldest job (at capacity %d): job_id=%s", self._max_size, evicted_id)
 
     def get(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:

@@ -10,11 +10,11 @@ pub mod solprobe_attestation {
         ctx: Context<InitializeConfig>,
         max_attestation_age_seconds: i64,
     ) -> Result<()> {
+        require!(max_attestation_age_seconds > 0, AttestationError::InvalidConfig);
         let config = &mut ctx.accounts.config;
         config.admin = ctx.accounts.admin.key();
         config.max_attestation_age_seconds = max_attestation_age_seconds;
         config.bump = ctx.bumps.config;
-        require!(max_attestation_age_seconds > 0, AttestationError::InvalidConfig);
         Ok(())
     }
 

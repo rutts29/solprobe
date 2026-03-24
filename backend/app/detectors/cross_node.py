@@ -97,7 +97,10 @@ def _detect_correlated_failures() -> list[AnomalyModel]:
 
     # Group recent alerts by time bucket (30s)
     window_start = now_ms - _CORRELATION_WINDOW_MS
-    recent_in_window = [a for a in recent_alerts if a.timestamp_ms >= window_start]
+    recent_in_window = [
+        a for a in recent_alerts
+        if a.timestamp_ms >= window_start and a.source != "CENTRAL"
+    ]
 
     # Group by distinct nodes
     nodes_with_alerts: dict[str, list[AlertModel]] = {}
@@ -139,8 +142,8 @@ def _detect_correlated_failures() -> list[AnomalyModel]:
         anomaly_store.add(anomaly.model_dump())
         findings.append(anomaly)
     logger.warning(
-        "Correlated failures: %d nodes affected in %ds window",
-        len(affected_nodes), _CORRELATION_WINDOW_MS // 1000,
+        "Correlated failures: %d nodes affected in %ds window: %s",
+        len(affected_nodes), _CORRELATION_WINDOW_MS // 1000, affected_nodes,
     )
     return findings
 

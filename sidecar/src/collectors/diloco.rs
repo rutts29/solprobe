@@ -66,6 +66,11 @@ impl DiLoCoMetricsReader {
             .unwrap_or_default()
             .as_millis() as i64;
         if now_ms - timestamp_ms > 5_000 {
+            tracing::debug!(
+                node_id = %self.node_id,
+                age_ms = now_ms - timestamp_ms,
+                "DiLoCo metrics stale, discarding"
+            );
             return None;
         }
 

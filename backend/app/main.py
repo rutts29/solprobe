@@ -182,7 +182,12 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     set_event_loop(asyncio.get_running_loop())
 
     # Start gRPC server (runs in its own thread pool)
-    start_grpc_server(port=int(os.environ.get("GRPC_PORT", "50051")))
+    _grpc_port_str = os.environ.get("GRPC_PORT", "50051")
+    try:
+        _grpc_port = int(_grpc_port_str)
+    except ValueError:
+        raise ValueError(f"GRPC_PORT must be a valid integer, got: {_grpc_port_str!r}") from None
+    start_grpc_server(port=_grpc_port)
 
     # Launch background detector loops
     _background_tasks.append(asyncio.create_task(_zscore_loop()))
