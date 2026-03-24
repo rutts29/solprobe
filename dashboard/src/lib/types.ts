@@ -14,6 +14,16 @@ export interface GpuMetrics {
   clock_throttle_reasons: number;
   sm_active_pct: number;
   tensor_active_pct: number;
+  memory_temp_c?: number;
+  mem_copy_utilization_pct?: number;
+  pcie_replay_counter?: number;
+  pcie_tx_bytes_per_sec?: number;
+  pcie_rx_bytes_per_sec?: number;
+  retired_pages_sbe?: number;
+  retired_pages_dbe?: number;
+  remapped_rows_correctable?: number;
+  remapped_rows_uncorrectable?: number;
+  row_remap_failure?: boolean;
 }
 
 export interface TrainingMetrics {

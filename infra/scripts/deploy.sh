@@ -50,8 +50,10 @@ echo "[3/6] Building and pushing Docker images..."
 cd "$ROOT_DIR"
 docker build -t "rutts29/solprobe-backend:${IMAGE_TAG}" -f backend/Dockerfile .
 docker build -t "rutts29/solprobe-sidecar:${IMAGE_TAG}" -f sidecar/Dockerfile .
+docker build -t "rutts29/solprobe-dashboard:${IMAGE_TAG}" -f dashboard/Dockerfile .
 docker push "rutts29/solprobe-backend:${IMAGE_TAG}"
 docker push "rutts29/solprobe-sidecar:${IMAGE_TAG}"
+docker push "rutts29/solprobe-dashboard:${IMAGE_TAG}"
 
 # 4. Create namespace and secrets
 echo "[4/6] Creating namespace and secrets..."

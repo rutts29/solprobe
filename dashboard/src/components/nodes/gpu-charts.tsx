@@ -72,6 +72,7 @@ export function GpuCharts({ metrics }: GpuChartsProps) {
 
 // Inline sub-components
 
+import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { LineChart, Line, ReferenceLine } from "recharts";
 import type { GpuMetrics } from "@/lib/types";
@@ -80,7 +81,13 @@ function MemoryBar({ data }: { data: GpuMetrics[] }) {
   const latest = data[data.length - 1];
   if (!latest) return <p className="text-muted-foreground">No data</p>;
   const total = latest.fb_used_mb + latest.fb_free_mb;
-  const pct = (latest.fb_used_mb / total) * 100;
+  const pct = total > 0 ? (latest.fb_used_mb / total) * 100 : 0;
+
+  const chartData = useMemo(() => data.slice(-20).map(d => ({
+    time: new Date(d.timestamp_ms).toLocaleTimeString(),
+    used: d.fb_used_mb,
+    free: d.fb_free_mb,
+  })), [data]);
 
   return (
     <div className="space-y-4">
@@ -97,11 +104,7 @@ function MemoryBar({ data }: { data: GpuMetrics[] }) {
       {/* Historical trend */}
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data.slice(-20).map(d => ({
-            time: new Date(d.timestamp_ms).toLocaleTimeString(),
-            used: d.fb_used_mb,
-            free: d.fb_free_mb,
-          }))}>
+          <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
             <XAxis dataKey="time" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
             <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} />
@@ -116,10 +119,10 @@ function MemoryBar({ data }: { data: GpuMetrics[] }) {
 }
 
 function PowerChart({ data }: { data: GpuMetrics[] }) {
-  const chartData = data.map(d => ({
+  const chartData = useMemo(() => data.map(d => ({
     time: new Date(d.timestamp_ms).toLocaleTimeString(),
     power: d.power_usage_w,
-  }));
+  })), [data]);
 
   return (
     <div className="h-64">

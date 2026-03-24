@@ -12,7 +12,8 @@ interface NodeCardProps {
 
 export function NodeCard({ node }: NodeCardProps) {
   const gpu = node.latest_metrics[0] ?? null;
-  const memPct = gpu ? (gpu.fb_used_mb / (gpu.fb_used_mb + gpu.fb_free_mb)) * 100 : 0;
+  const total = gpu ? gpu.fb_used_mb + gpu.fb_free_mb : 0;
+  const memPct = total > 0 ? (gpu!.fb_used_mb / total) * 100 : 0;
 
   return (
     <Link href={`/nodes/${node.node_id}`}>

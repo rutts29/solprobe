@@ -2,6 +2,7 @@ use crate::proto::solprobe::v1::TrainingMetrics;
 use memmap2::Mmap;
 use std::fs::File;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Expected binary layout size (little-endian):
 ///   u8  valid_flag       (1 byte)
@@ -56,6 +57,21 @@ impl TrainingMetricsReader {
         }
 
         let timestamp_ms = i64::from_le_bytes(buf[1..9].try_into().ok()?);
+
+        // Staleness check: discard data older than 5 seconds
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        if now_ms - timestamp_ms > 5_000 {
+            tracing::debug!(
+                node_id = %self.node_id,
+                age_ms = now_ms - timestamp_ms,
+                "Training metrics stale, discarding"
+            );
+            return None;
+        }
+
         let step = u64::from_le_bytes(buf[9..17].try_into().ok()?);
         let loss = f32::from_le_bytes(buf[17..21].try_into().ok()?);
         let gradient_norm = f32::from_le_bytes(buf[21..25].try_into().ok()?);
@@ -114,12 +130,16 @@ mod tests {
         let node_id = format!("test_valid_{}", std::process::id());
         let path = PathBuf::from(format!("/tmp/solprobe_training_{}.bin", node_id));
 
-        write_test_file(&path, 1, 1700000000000, 42, 2.5, 1.2, 3e-4, 5000.0, 45.0);
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        write_test_file(&path, 1, now_ms, 42, 2.5, 1.2, 3e-4, 5000.0, 45.0);
 
         let reader = TrainingMetricsReader::new(node_id);
         let metrics = reader.read().expect("Should parse valid file");
 
-        assert_eq!(metrics.timestamp_ms, 1700000000000);
+        assert!((metrics.timestamp_ms - now_ms).abs() < 1000);
         assert_eq!(metrics.step, 42);
         assert!((metrics.loss - 2.5).abs() < 1e-6);
         assert!((metrics.gradient_norm - 1.2).abs() < 1e-6);
@@ -135,7 +155,11 @@ mod tests {
         let node_id = format!("test_invalid_{}", std::process::id());
         let path = PathBuf::from(format!("/tmp/solprobe_training_{}.bin", node_id));
 
-        write_test_file(&path, 0, 1700000000000, 10, 1.0, 0.5, 1e-4, 3000.0, 40.0);
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        write_test_file(&path, 0, now_ms, 10, 1.0, 0.5, 1e-4, 3000.0, 40.0);
 
         let reader = TrainingMetricsReader::new(node_id);
         assert!(reader.read().is_none(), "valid_flag=0 should return None");

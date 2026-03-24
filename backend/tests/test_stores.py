@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from app.models.metrics import MetricsBatchModel
-from app.stores import AlertStore, MetricsStore
+from app.stores import AlertStore, JobStore, MetricsStore
 
 from tests.conftest import _make_alert, _make_gpu_metric, _make_training_metric
 
@@ -193,3 +193,27 @@ class TestAlertStore:
         correlated = store.get_correlated(now, exclude_node="node-1", window_ms=30_000)
         assert len(correlated) == 1
         assert correlated[0].node_id == "node-2"
+
+
+class TestJobStore:
+    def test_bounded_eviction(self):
+        store = JobStore(max_size=3)
+        for i in range(4):
+            store.register(f"job-{i}", {"type": "train"}, [f"node-{i}"])
+        # Oldest (job-0) should be evicted
+        assert store.get("job-0") is None
+        assert store.get("job-1") is not None
+        assert store.get("job-3") is not None
+
+    def test_reregister_moves_to_end(self):
+        store = JobStore(max_size=3)
+        store.register("job-a", {}, ["n1"])
+        store.register("job-b", {}, ["n2"])
+        store.register("job-c", {}, ["n3"])
+        # Re-register job-a (should move to end)
+        store.register("job-a", {}, ["n1"])
+        # Now add job-d — job-b should be evicted (oldest), not job-a
+        store.register("job-d", {}, ["n4"])
+        assert store.get("job-b") is None
+        assert store.get("job-a") is not None
+        assert store.get("job-d") is not None

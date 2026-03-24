@@ -24,6 +24,7 @@ export function AlertDetail({ alert, onClose }: AlertDetailProps) {
   const [requestError, setRequestError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setEnriched(null);
     setEnrichedError(null);
     setDiagnosis(null);
@@ -31,21 +32,25 @@ export function AlertDetail({ alert, onClose }: AlertDetailProps) {
     setRequestError(null);
 
     fetchEnrichedAlert(alert.alert_id)
-      .then(setEnriched)
+      .then((data) => { if (!cancelled) setEnriched(data); })
       .catch((err) => {
+        if (cancelled) return;
         if (err instanceof Error && err.message.includes("404")) return;
         setEnrichedError(err instanceof Error ? err.message : "Failed to load enriched alert");
       });
 
     fetchAlertDiagnosis(alert.alert_id)
-      .then(setDiagnosis)
+      .then((data) => { if (!cancelled) setDiagnosis(data); })
       .catch((err) => {
+        if (cancelled) return;
         if (err instanceof Error && err.message.includes("404")) {
           setDiagnosisNotFound(true);
           return;
         }
         console.error("[AlertDetail] failed to fetch diagnosis:", err);
       });
+
+    return () => { cancelled = true; };
   }, [alert.alert_id]);
 
   async function handleRequestDiagnosis() {

@@ -20,7 +20,7 @@ export function EvidenceChain({ evidence }: EvidenceChainProps) {
             const numVal = parseFloat(item.value);
             const isNumeric = !isNaN(numVal);
             return (
-              <div key={i} className="flex items-start gap-3 border-l-2 border-border pl-4">
+              <div key={item.metric || i} className="flex items-start gap-3 border-l-2 border-border pl-4">
                 <div className="mt-0.5 text-muted-foreground">
                   {isNumeric && numVal > 0 ? (
                     <TrendingUp className="h-4 w-4 text-red-400" />

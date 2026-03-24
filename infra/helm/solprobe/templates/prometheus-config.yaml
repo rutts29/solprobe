@@ -49,4 +49,32 @@ data:
             target_label: __address__
             regex: (.+);(.+)
             replacement: $1:$2
+
+  alert_rules.yml: |
+    groups:
+      - name: solprobe-gpu
+        rules:
+          - alert: GPUTemperatureHigh
+            expr: solprobe_gpu_temp > 85
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "GPU temperature above 85C on {{ "{{ $labels.node_id }}" }}"
+
+          - alert: GPUMemoryHigh
+            expr: solprobe_gpu_memory_used_pct > 95
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "GPU memory above 95% on {{ "{{ $labels.node_id }}" }}"
+
+          - alert: GPUUtilizationLow
+            expr: solprobe_gpu_utilization < 10
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "GPU utilization below 10% on {{ "{{ $labels.node_id }}" }}"
 {{- end }}

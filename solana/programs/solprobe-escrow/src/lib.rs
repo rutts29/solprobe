@@ -54,9 +54,16 @@ pub mod solprobe_escrow {
         escrow.created_at = Clock::get()?.unix_timestamp;
         escrow.bump = ctx.bumps.escrow_job;
 
+        emit!(JobCreated {
+            creator: ctx.accounts.creator.key(),
+            job_id: escrow.job_id.clone(),
+            total_budget,
+            worker_count: escrow.workers.len() as u8,
+        });
         Ok(())
     }
 
+    // NOTE: Worker self-release is demo-scope; production would require oracle/creator approval.
     pub fn release_payment(ctx: Context<ReleasePayment>, _job_id: String) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow_job;
         require!(escrow.status == JobStatus::Active, EscrowError::JobNotActive);
@@ -96,9 +103,15 @@ pub mod solprobe_escrow {
             amount,
         )?;
 
+        emit!(PaymentReleased {
+            job_id: escrow.job_id.clone(),
+            worker: ctx.accounts.worker.key(),
+            amount,
+        });
         Ok(())
     }
 
+    // NOTE: Creator-initiated slash is demo-scope; production would require oracle verification.
     pub fn slash_payment(
         ctx: Context<SlashPayment>,
         _job_id: String,
@@ -143,6 +156,11 @@ pub mod solprobe_escrow {
             amount,
         )?;
 
+        emit!(PaymentSlashed {
+            job_id: escrow.job_id.clone(),
+            worker: allocation_entry.worker,
+            amount,
+        });
         Ok(())
     }
 
@@ -150,7 +168,15 @@ pub mod solprobe_escrow {
         let escrow = &mut ctx.accounts.escrow_job;
         require!(escrow.status == JobStatus::Active, EscrowError::JobNotActive);
 
+        let all_settled = escrow.workers.iter().all(|w| w.released);
+        require!(all_settled, EscrowError::WorkersNotSettled);
+
         escrow.status = JobStatus::Completed;
+
+        emit!(JobClosed {
+            job_id: escrow.job_id.clone(),
+            creator: ctx.accounts.creator.key(),
+        });
 
         // Reclaim any remaining SOL from vault back to creator
         let remaining = ctx.accounts.vault.to_account_info().lamports();
@@ -329,12 +355,39 @@ pub enum JobStatus {
     #[default]
     Active,    // 0
     Completed, // 1
-    Disputed,  // 2
 }
 
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
+
+#[event]
+pub struct JobCreated {
+    pub creator: Pubkey,
+    pub job_id: String,
+    pub total_budget: u64,
+    pub worker_count: u8,
+}
+
+#[event]
+pub struct PaymentReleased {
+    pub job_id: String,
+    pub worker: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct PaymentSlashed {
+    pub job_id: String,
+    pub worker: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct JobClosed {
+    pub job_id: String,
+    pub creator: Pubkey,
+}
 
 #[error_code]
 pub enum EscrowError {
@@ -356,4 +409,6 @@ pub enum EscrowError {
     AlreadyReleased,
     #[msg("Invalid worker index")]
     InvalidWorkerIndex,
+    #[msg("All workers must be settled before closing")]
+    WorkersNotSettled,
 }

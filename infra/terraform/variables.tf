@@ -6,7 +6,11 @@ variable "project_id" {
 variable "authorized_network" {
   description = "CIDR block allowed to access the GKE master API"
   type        = string
-  default     = "0.0.0.0/0"
+
+  validation {
+    condition     = can(cidrhost(var.authorized_network, 0))
+    error_message = "authorized_network must be a valid CIDR block (e.g. 10.0.0.0/24)."
+  }
 }
 
 variable "region" {

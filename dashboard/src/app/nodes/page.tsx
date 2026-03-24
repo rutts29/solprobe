@@ -12,7 +12,7 @@ export default function NodesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Nodes</h1>
         <button
-          onClick={refresh}
+          onClick={() => refresh()}
           className="text-sm text-muted-foreground hover:text-foreground"
         >
           Refresh
@@ -22,7 +22,7 @@ export default function NodesPage() {
       {error && (
         <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
           {error}
-          <button onClick={refresh} className="ml-2 underline">Retry</button>
+          <button onClick={() => refresh()} className="ml-2 underline">Retry</button>
         </div>
       )}
 

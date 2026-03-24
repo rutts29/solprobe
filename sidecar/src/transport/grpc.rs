@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
 use tonic::transport::Channel;
@@ -11,6 +11,7 @@ use crate::proto::solprobe::v1::{
 pub struct GrpcTransport {
     backend_addr: String,
     client: Option<SolProbeServiceClient<Channel>>,
+    last_connect_attempt: Option<Instant>,
 }
 
 impl GrpcTransport {
@@ -18,6 +19,7 @@ impl GrpcTransport {
         Self {
             backend_addr,
             client: None,
+            last_connect_attempt: None,
         }
     }
 
@@ -63,7 +65,15 @@ impl GrpcTransport {
 
     /// Try to connect, but don't fail if the backend is unavailable.
     /// Returns true if connected, false otherwise.
+    /// Throttled to at most one attempt every 5 seconds.
     pub async fn try_connect(&mut self) -> bool {
+        if let Some(last) = self.last_connect_attempt {
+            if last.elapsed() < Duration::from_secs(5) {
+                tracing::trace!("Reconnect throttled, last attempt was {:?} ago", last.elapsed());
+                return false;
+            }
+        }
+        self.last_connect_attempt = Some(Instant::now());
         match SolProbeServiceClient::connect(self.backend_addr.clone()).await {
             Ok(client) => {
                 tracing::info!(addr = %self.backend_addr, "Connected to backend");
@@ -90,7 +100,8 @@ impl GrpcTransport {
             }
         }
 
-        let client = self.client.as_mut().unwrap();
+        let client = self.client.as_mut()
+            .ok_or_else(|| "client not connected".to_string())?;
         let (tx, rx) = mpsc::channel(1);
         if tx.send(batch).await.is_err() {
             return Err("Failed to enqueue batch".to_string());
@@ -124,7 +135,8 @@ impl GrpcTransport {
             }
         }
 
-        let client = self.client.as_mut().unwrap();
+        let client = self.client.as_mut()
+            .ok_or_else(|| "client not connected".to_string())?;
 
         match client.report_alert(alert).await {
             Ok(response) => {

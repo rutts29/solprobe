@@ -320,9 +320,10 @@ impl Detector for ThresholdDetector {
                 ev.insert("xid_code".into(), format!("{}", gpu.xid_errors));
                 let is_critical = self.config.critical_xid_codes.contains(&gpu.xid_errors);
                 ev.insert("is_critical_xid".into(), format!("{}", is_critical));
+                let severity = if is_critical { Severity::Critical } else { Severity::Warning };
                 alerts.push(Self::make_alert(
                     &gpu.node_id,
-                    Severity::Critical,
+                    severity,
                     AlertType::XidError,
                     format!(
                         "GPU {} reported Xid error {}",
@@ -350,8 +351,9 @@ impl Detector for ThresholdDetector {
                 ));
             }
 
-            // Clock throttle reasons
-            if gpu.clock_throttle_reasons != 0 {
+            // Clock throttle reasons — mask out benign bits (GpuIdle, AppClocks, SwPowerCap, SyncBoost, DisplayClock)
+            let alert_bits = gpu.clock_throttle_reasons & 0xE8; // HwSlowdown(0x8) | SwThermal(0x20) | HwThermal(0x40) | HwPowerBrake(0x80)
+            if alert_bits != 0 {
                 let decoded = Self::decode_clock_throttle(gpu.clock_throttle_reasons);
                 let mut ev = HashMap::new();
                 ev.insert(
