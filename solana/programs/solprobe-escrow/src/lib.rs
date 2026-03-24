@@ -68,6 +68,7 @@ pub mod solprobe_escrow {
         let escrow = &mut ctx.accounts.escrow_job;
         require!(escrow.status == JobStatus::Active, EscrowError::JobNotActive);
 
+        let event_job_id = escrow.job_id.clone();
         let worker_key = ctx.accounts.worker.key();
         let allocation_entry = escrow
             .workers
@@ -104,8 +105,8 @@ pub mod solprobe_escrow {
         )?;
 
         emit!(PaymentReleased {
-            job_id: escrow.job_id.clone(),
-            worker: ctx.accounts.worker.key(),
+            job_id: event_job_id,
+            worker: worker_key,
             amount,
         });
         Ok(())
@@ -126,10 +127,12 @@ pub mod solprobe_escrow {
             EscrowError::InvalidWorkerIndex
         );
 
+        let event_job_id = escrow.job_id.clone();
         let allocation_entry = &mut escrow.workers[worker_index as usize];
         require!(!allocation_entry.released, EscrowError::AlreadyReleased);
 
         let amount = allocation_entry.allocation;
+        let event_worker = allocation_entry.worker;
         allocation_entry.released = true;
 
         escrow.released_amount = escrow
@@ -157,8 +160,8 @@ pub mod solprobe_escrow {
         )?;
 
         emit!(PaymentSlashed {
-            job_id: escrow.job_id.clone(),
-            worker: allocation_entry.worker,
+            job_id: event_job_id,
+            worker: event_worker,
             amount,
         });
         Ok(())
