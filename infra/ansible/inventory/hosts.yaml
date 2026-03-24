@@ -11,5 +11,5 @@ all:
       vars:
         ansible_user: ubuntu
         ansible_python_interpreter: /usr/bin/python3
-        backend_addr: "http://solprobe-backend:50051"
+        backend_addr: "http://{{ backend_ip }}:50051"
         sidecar_metrics_port: 9100
