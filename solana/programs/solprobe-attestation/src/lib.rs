@@ -14,6 +14,7 @@ pub mod solprobe_attestation {
         config.admin = ctx.accounts.admin.key();
         config.max_attestation_age_seconds = max_attestation_age_seconds;
         config.bump = ctx.bumps.config;
+        require!(max_attestation_age_seconds > 0, AttestationError::InvalidConfig);
         Ok(())
     }
 
@@ -48,7 +49,9 @@ pub mod solprobe_attestation {
 
         let clock = Clock::get()?;
         let config = &ctx.accounts.config;
-        let age = clock.unix_timestamp - attestation.timestamp;
+        let age = clock.unix_timestamp
+            .checked_sub(attestation.timestamp)
+            .ok_or(AttestationError::AttestationTooOld)?;
         require!(
             age <= config.max_attestation_age_seconds,
             AttestationError::AttestationTooOld
@@ -97,7 +100,16 @@ pub struct SubmitAttestation<'info> {
 
 #[derive(Accounts)]
 pub struct VerifyAttestation<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            b"attestation",
+            attestation.job_id.as_bytes(),
+            &attestation.step.to_le_bytes(),
+            attestation.worker.as_ref(),
+        ],
+        bump = attestation.bump,
+    )]
     pub attestation: Account<'info, Attestation>,
     #[account(
         seeds = [b"attestation_config"],
@@ -142,4 +154,6 @@ pub enum AttestationError {
     AlreadyVerified,
     #[msg("Attestation is too old to verify")]
     AttestationTooOld,
+    #[msg("Invalid configuration value")]
+    InvalidConfig,
 }

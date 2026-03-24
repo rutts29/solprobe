@@ -10,8 +10,8 @@ interface LossChartProps {
 export function LossChart({ data }: LossChartProps) {
   const chartData = data.map((d) => ({
     step: d.step,
-    loss: d.loss,
-    gradNorm: d.gradient_norm,
+    loss: Math.max(d.loss, 1e-8),
+    gradNorm: Math.max(d.gradient_norm, 1e-8),
     lr: d.learning_rate,
   }));
 

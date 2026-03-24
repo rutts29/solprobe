@@ -18,6 +18,8 @@ pub mod solprobe_staking {
             StakingError::InvalidSlashPercentage
         );
 
+        require!(cooldown_seconds >= 0, StakingError::InvalidCooldown);
+
         let config = &mut ctx.accounts.stake_config;
         config.admin = ctx.accounts.admin.key();
         config.min_stake_lamports = min_stake;
@@ -164,6 +166,7 @@ pub mod solprobe_staking {
             ctx.accounts.admin.key() == ctx.accounts.stake_config.admin,
             StakingError::NotAdmin
         );
+        require!(cooldown_seconds >= 0, StakingError::InvalidCooldown);
 
         let config = &mut ctx.accounts.stake_config;
         config.min_stake_lamports = min_stake;
@@ -244,6 +247,7 @@ pub struct Slash<'info> {
     #[account(
         seeds = [b"stake_config"],
         bump = stake_config.bump,
+        has_one = admin,
     )]
     pub stake_config: Account<'info, StakeConfig>,
 
@@ -286,6 +290,7 @@ pub struct UpdateConfig<'info> {
         mut,
         seeds = [b"stake_config"],
         bump = stake_config.bump,
+        has_one = admin,
     )]
     pub stake_config: Account<'info, StakeConfig>,
 
@@ -331,4 +336,6 @@ pub enum StakingError {
     StakeNotActive,
     #[msg("Slash percentage must be between 0 and 100")]
     InvalidSlashPercentage,
+    #[msg("Cooldown seconds must be non-negative")]
+    InvalidCooldown,
 }

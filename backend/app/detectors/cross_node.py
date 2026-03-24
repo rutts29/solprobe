@@ -109,34 +109,35 @@ def _detect_correlated_failures() -> list[AnomalyModel]:
 
     findings: list[AnomalyModel] = []
     affected_nodes = list(nodes_with_alerts.keys())
-    alert = AlertModel(
-        alert_id=str(uuid.uuid4()),
-        node_id=",".join(affected_nodes),
-        timestamp_ms=now_ms,
-        severity="CRITICAL",
-        source="CENTRAL",
-        alert_type="nccl_timeout",
-        description=(
-            f"Correlated failures detected across {len(affected_nodes)} nodes "
-            f"within {_CORRELATION_WINDOW_MS // 1000}s: {affected_nodes}"
-        ),
-        confidence=min(1.0, len(affected_nodes) / 4.0),
-        evidence={
-            "detector": "cross_node_correlation",
-            "affected_nodes": ",".join(affected_nodes),
-            "alert_count": str(len(recent_in_window)),
-            "window_seconds": str(_CORRELATION_WINDOW_MS // 1000),
-        },
-    )
-    anomaly = AnomalyModel(
-        alert=alert,
-        detector_name="cross_node",
-        window_minutes=1,
-        raw_score=float(len(affected_nodes)),
-    )
-    alert_store.add(alert)
-    anomaly_store.add(anomaly.model_dump())
-    findings.append(anomaly)
+    for node_id in affected_nodes:
+        alert = AlertModel(
+            alert_id=str(uuid.uuid4()),
+            node_id=node_id,
+            timestamp_ms=now_ms,
+            severity="CRITICAL",
+            source="CENTRAL",
+            alert_type="nccl_timeout",
+            description=(
+                f"Correlated failures detected across {len(affected_nodes)} nodes "
+                f"within {_CORRELATION_WINDOW_MS // 1000}s: {affected_nodes}"
+            ),
+            confidence=min(1.0, len(affected_nodes) / 4.0),
+            evidence={
+                "detector": "cross_node_correlation",
+                "affected_nodes": ",".join(affected_nodes),
+                "alert_count": str(len(recent_in_window)),
+                "window_seconds": str(_CORRELATION_WINDOW_MS // 1000),
+            },
+        )
+        anomaly = AnomalyModel(
+            alert=alert,
+            detector_name="cross_node",
+            window_minutes=1,
+            raw_score=float(len(affected_nodes)),
+        )
+        alert_store.add(alert)
+        anomaly_store.add(anomaly.model_dump())
+        findings.append(anomaly)
     logger.warning(
         "Correlated failures: %d nodes affected in %ds window",
         len(affected_nodes), _CORRELATION_WINDOW_MS // 1000,

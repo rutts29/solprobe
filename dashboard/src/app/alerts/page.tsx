@@ -21,8 +21,12 @@ export default function AlertsPage() {
   const ws = useWebSocket();
 
   const onAlert = useCallback(
-    (msg: { type: "alert"; data: AlertModel }) => prepend(msg.data),
-    [prepend]
+    (msg: { type: "alert"; data: AlertModel }) => {
+      if (severity === "ALL" || msg.data.severity === severity) {
+        prepend(msg.data);
+      }
+    },
+    [prepend, severity]
   );
 
   useRealtime(ws.subscribe, { onAlert });

@@ -22,7 +22,7 @@ class TestComputeZscore:
         assert abs(z) < 3.0  # last value is not anomalous
 
     def test_spike_detected(self):
-        values = [50.0] * 49 + [200.0]  # massive spike at end
+        values = [50.0 + (i % 3) * 0.1 for i in range(49)] + [200.0]  # massive spike at end
         z = _compute_zscore(values)
         assert z is not None
         assert z > 3.0
@@ -48,11 +48,11 @@ class TestRunZscoreDetection:
 
     def test_temperature_spike_generates_alert(self, fresh_stores):
         ms, als, *_ = fresh_stores
-        # 59 normal readings then a huge spike
+        # 59 normal readings with slight variation, then a huge spike
         for i in range(59):
             ms.ingest_batch(
                 MetricsBatchModel(
-                    gpu=[_make_gpu_metric("node-1", temp=55.0, ts=1000 + i)]
+                    gpu=[_make_gpu_metric("node-1", temp=55.0 + (i % 3) * 0.1, ts=1000 + i)]
                 )
             )
         ms.ingest_batch(
@@ -74,7 +74,7 @@ class TestRunZscoreDetection:
             ms.ingest_batch(
                 MetricsBatchModel(
                     training=_make_training_metric(
-                        "node-1", grad_norm=1.0, step=i, ts=1000 + i
+                        "node-1", grad_norm=1.0 + (i % 3) * 0.01, step=i, ts=1000 + i
                     )
                 )
             )
@@ -97,7 +97,7 @@ class TestRunZscoreDetection:
         for i in range(59):
             ms.ingest_batch(
                 MetricsBatchModel(
-                    gpu=[_make_gpu_metric("node-1", temp=55.0, ts=1000 + i)]
+                    gpu=[_make_gpu_metric("node-1", temp=55.0 + (i % 3) * 0.1, ts=1000 + i)]
                 )
             )
         ms.ingest_batch(
