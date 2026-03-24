@@ -29,11 +29,6 @@ data:
           - source_labels: [__meta_kubernetes_pod_label_app]
             regex: solprobe-sidecar
             action: keep
-          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
-            target_label: __address__
-            regex: (.+)
-            replacement: ${1}
-            action: replace
           - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
             target_label: __address__
             regex: (.+);(.+)

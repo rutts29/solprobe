@@ -47,10 +47,6 @@ export function fetchEnrichedAlert(alertId: string): Promise<EnrichedAlert> {
   return apiFetch(`/api/v1/alerts/${alertId}/enriched`);
 }
 
-export function fetchAnomalies(limit?: number): Promise<unknown[]> {
-  return apiFetch(`/api/v1/anomalies${limit ? `?limit=${limit}` : ""}`);
-}
-
 export function fetchDiagnoses(params?: {
   node_id?: string;
   root_cause?: string;
@@ -79,6 +75,3 @@ export function fetchAlertDiagnosis(alertId: string): Promise<DiagnosisResult> {
   return apiFetch(`/api/v1/alerts/${alertId}/diagnosis`);
 }
 
-export function fetchJobs(): Promise<unknown[]> {
-  return apiFetch("/api/v1/jobs");
-}

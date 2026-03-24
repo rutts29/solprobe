@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { DiagnosisCard } from "@/components/diagnoses/diagnosis-card";
 import { EvidenceChain } from "@/components/diagnoses/evidence-chain";
 import { ActionPanel } from "@/components/diagnoses/action-panel";
@@ -27,7 +27,7 @@ export default function DiagnosesPage() {
   useRealtime(ws.subscribe, { onDiagnosis });
 
   // Extract unique node IDs for filter
-  const nodeIds = [...new Set(diagnoses.map((d) => d.node_id))];
+  const nodeIds = useMemo(() => [...new Set(diagnoses.map((d) => d.node_id))], [diagnoses]);
 
   return (
     <div className="space-y-6">

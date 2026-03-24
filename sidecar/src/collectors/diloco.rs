@@ -2,6 +2,7 @@ use crate::proto::solprobe::v1::DiLoCoMetrics;
 use memmap2::Mmap;
 use std::fs::File;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Expected binary layout size (little-endian):
 ///   u8  valid_flag         (1 byte)
@@ -16,11 +17,7 @@ use std::path::PathBuf;
 ///   u8  is_straggler       (1 byte)
 ///   Total: 46 bytes
 ///
-/// Note: The spec says 42 bytes, but with correct field sizes it is 46.
-/// We accept files >= 42 bytes for backward compatibility.
-#[allow(dead_code)]
 const DILOCO_RECORD_SIZE: usize = 46;
-const DILOCO_MIN_SIZE: usize = 42;
 
 /// Reads DiLoCoMetrics from a memory-mapped file written by the training loop.
 /// File path: `/tmp/solprobe_diloco_{node_id}.bin`
@@ -45,11 +42,11 @@ impl DiLoCoMetricsReader {
 
         let mmap = unsafe { Mmap::map(&file) }.ok()?;
 
-        if mmap.len() < DILOCO_MIN_SIZE {
+        if mmap.len() < DILOCO_RECORD_SIZE {
             tracing::warn!(
                 path = %path.display(),
                 len = mmap.len(),
-                expected = DILOCO_MIN_SIZE,
+                expected = DILOCO_RECORD_SIZE,
                 "DiLoCo metrics file too small"
             );
             return None;
@@ -62,25 +59,29 @@ impl DiLoCoMetricsReader {
         }
 
         let timestamp_ms = i64::from_le_bytes(buf[1..9].try_into().ok()?);
+
+        // Staleness check: discard data older than 5 seconds
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
+        if now_ms - timestamp_ms > 5_000 {
+            tracing::debug!(
+                node_id = %self.node_id,
+                age_ms = now_ms - timestamp_ms,
+                "DiLoCo metrics stale, discarding"
+            );
+            return None;
+        }
+
         let inner_step = u64::from_le_bytes(buf[9..17].try_into().ok()?);
         let outer_step = u64::from_le_bytes(buf[17..25].try_into().ok()?);
         let inner_loss = f32::from_le_bytes(buf[25..29].try_into().ok()?);
         let outer_loss = f32::from_le_bytes(buf[29..33].try_into().ok()?);
         let pseudo_grad_norm = f32::from_le_bytes(buf[33..37].try_into().ok()?);
         let sync_duration_ms = f32::from_le_bytes(buf[37..41].try_into().ok()?);
-
-        // These fields may or may not be present depending on file size
-        let worker_speed_ratio = if buf.len() > 44 {
-            f32::from_le_bytes(buf[41..45].try_into().ok()?)
-        } else {
-            1.0 // default
-        };
-
-        let is_straggler = if buf.len() > 45 {
-            buf[45] != 0
-        } else {
-            false
-        };
+        let worker_speed_ratio = f32::from_le_bytes(buf[41..45].try_into().ok()?);
+        let is_straggler = buf[45] != 0;
 
         Some(DiLoCoMetrics {
             node_id: self.node_id.clone(),

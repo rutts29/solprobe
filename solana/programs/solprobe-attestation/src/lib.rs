@@ -10,6 +10,7 @@ pub mod solprobe_attestation {
         ctx: Context<InitializeConfig>,
         max_attestation_age_seconds: i64,
     ) -> Result<()> {
+        require!(max_attestation_age_seconds > 0, AttestationError::InvalidConfig);
         let config = &mut ctx.accounts.config;
         config.admin = ctx.accounts.admin.key();
         config.max_attestation_age_seconds = max_attestation_age_seconds;
@@ -39,6 +40,12 @@ pub mod solprobe_attestation {
         attestation.timestamp = clock.unix_timestamp;
         attestation.verified = false;
         attestation.bump = ctx.bumps.attestation;
+
+        emit!(AttestationSubmitted {
+            worker: ctx.accounts.worker.key(),
+            job_id: attestation.job_id.clone(),
+            step: attestation.step,
+        });
         Ok(())
     }
 
@@ -48,13 +55,21 @@ pub mod solprobe_attestation {
 
         let clock = Clock::get()?;
         let config = &ctx.accounts.config;
-        let age = clock.unix_timestamp - attestation.timestamp;
+        let age = clock.unix_timestamp
+            .checked_sub(attestation.timestamp)
+            .ok_or(AttestationError::AttestationTooOld)?;
         require!(
             age <= config.max_attestation_age_seconds,
             AttestationError::AttestationTooOld
         );
 
         attestation.verified = true;
+
+        emit!(AttestationVerified {
+            worker: attestation.worker,
+            job_id: attestation.job_id.clone(),
+            step: attestation.step,
+        });
         Ok(())
     }
 }
@@ -97,7 +112,16 @@ pub struct SubmitAttestation<'info> {
 
 #[derive(Accounts)]
 pub struct VerifyAttestation<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            b"attestation",
+            attestation.job_id.as_bytes(),
+            &attestation.step.to_le_bytes(),
+            attestation.worker.as_ref(),
+        ],
+        bump = attestation.bump,
+    )]
     pub attestation: Account<'info, Attestation>,
     #[account(
         seeds = [b"attestation_config"],
@@ -132,6 +156,20 @@ pub struct Attestation {
     pub bump: u8,
 }
 
+#[event]
+pub struct AttestationSubmitted {
+    pub worker: Pubkey,
+    pub job_id: String,
+    pub step: u64,
+}
+
+#[event]
+pub struct AttestationVerified {
+    pub worker: Pubkey,
+    pub job_id: String,
+    pub step: u64,
+}
+
 #[error_code]
 pub enum AttestationError {
     #[msg("Job ID exceeds maximum length of 32 bytes")]
@@ -142,4 +180,6 @@ pub enum AttestationError {
     AlreadyVerified,
     #[msg("Attestation is too old to verify")]
     AttestationTooOld,
+    #[msg("Invalid configuration value")]
+    InvalidConfig,
 }

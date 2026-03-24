@@ -8,9 +8,16 @@
     update_cache: true
   when: ansible_os_family == "Debian"
 
-- name: Add NVIDIA package repository key (Ubuntu)
-  apt_key:
+- name: Download NVIDIA package repository GPG key (Ubuntu)
+  get_url:
     url: https://nvidia.github.io/libnvidia-container/gpgkey
+    dest: /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    mode: "0644"
+  when: ansible_os_family == "Debian"
+
+- name: Add NVIDIA container toolkit repo with signed-by (Ubuntu)
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/deb/$(ARCH) /"
     state: present
   when: ansible_os_family == "Debian"
 
@@ -24,7 +31,7 @@
 
 - name: Install NVIDIA driver (RHEL)
   yum:
-    name: nvidia-driver-latest-dkms
+    name: nvidia-driver-535-dkms
     state: present
   when: ansible_os_family == "RedHat"
   notify: Reboot if needed

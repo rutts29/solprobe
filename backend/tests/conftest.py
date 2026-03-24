@@ -75,6 +75,7 @@ def _make_alert(
     severity: str = "WARNING",
     alert_type: str = "thermal_throttle",
     ts: int | None = None,
+    source: str = "EDGE",
 ) -> AlertModel:
     import uuid
 
@@ -83,7 +84,7 @@ def _make_alert(
         node_id=node_id,
         timestamp_ms=ts or int(time.time() * 1000),
         severity=severity,
-        source="CENTRAL",
+        source=source,
         alert_type=alert_type,
         description="Test alert",
         confidence=0.9,
@@ -108,6 +109,9 @@ def fresh_stores(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(mod, "alert_store", als)
         if hasattr(mod, "anomaly_store"):
             monkeypatch.setattr(mod, "anomaly_store", ans)
+
+    # Reset z-score deduplication state between tests
+    zscore_mod._last_alerted.clear()
 
     return ms, als, ans, js
 

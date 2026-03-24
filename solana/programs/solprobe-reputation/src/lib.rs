@@ -16,23 +16,40 @@ pub mod solprobe_reputation {
         profile.reputation_score = 10_000;
         profile.registered_at = Clock::get()?.unix_timestamp;
         profile.bump = ctx.bumps.worker_profile;
+
+        emit!(WorkerRegistered {
+            worker: ctx.accounts.worker.key(),
+        });
         Ok(())
     }
 
+    // NOTE: In production, record_completion/record_failure should be gated by an
+    // oracle or CPI from the escrow program, not the worker's own authority.
     pub fn record_completion(ctx: Context<UpdateProfile>, _job_id: String) -> Result<()> {
         let profile = &mut ctx.accounts.worker_profile;
-        profile.total_jobs = profile.total_jobs.checked_add(1).unwrap();
-        profile.completed_jobs = profile.completed_jobs.checked_add(1).unwrap();
+        profile.total_jobs = profile.total_jobs.checked_add(1).ok_or(ReputationError::Overflow)?;
+        profile.completed_jobs = profile.completed_jobs.checked_add(1).ok_or(ReputationError::Overflow)?;
         profile.reputation_score = ((profile.completed_jobs as u128 * 10_000) / profile.total_jobs as u128) as u16;
+
+        emit!(JobCompleted {
+            worker: ctx.accounts.authority.key(),
+            reputation_score: profile.reputation_score,
+        });
         Ok(())
     }
 
     pub fn record_failure(ctx: Context<UpdateProfile>, _job_id: String, slash_amount: u64) -> Result<()> {
         let profile = &mut ctx.accounts.worker_profile;
-        profile.total_jobs = profile.total_jobs.checked_add(1).unwrap();
-        profile.failed_jobs = profile.failed_jobs.checked_add(1).unwrap();
-        profile.total_stake_slashed = profile.total_stake_slashed.checked_add(slash_amount).unwrap();
+        profile.total_jobs = profile.total_jobs.checked_add(1).ok_or(ReputationError::Overflow)?;
+        profile.failed_jobs = profile.failed_jobs.checked_add(1).ok_or(ReputationError::Overflow)?;
+        profile.total_stake_slashed = profile.total_stake_slashed.checked_add(slash_amount).ok_or(ReputationError::Overflow)?;
         profile.reputation_score = ((profile.completed_jobs as u128 * 10_000) / profile.total_jobs as u128) as u16;
+
+        emit!(JobFailed {
+            worker: ctx.accounts.authority.key(),
+            slash_amount,
+            reputation_score: profile.reputation_score,
+        });
         Ok(())
     }
 }
@@ -77,10 +94,28 @@ pub struct WorkerProfile {
     pub bump: u8,
 }
 
+#[event]
+pub struct WorkerRegistered {
+    pub worker: Pubkey,
+}
+
+#[event]
+pub struct JobCompleted {
+    pub worker: Pubkey,
+    pub reputation_score: u16,
+}
+
+#[event]
+pub struct JobFailed {
+    pub worker: Pubkey,
+    pub slash_amount: u64,
+    pub reputation_score: u16,
+}
+
 #[error_code]
 pub enum ReputationError {
-    #[msg("Worker profile already registered")]
-    AlreadyRegistered,
     #[msg("Signer is not the profile authority")]
     NotAuthority,
+    #[msg("Arithmetic overflow")]
+    Overflow,
 }

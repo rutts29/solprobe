@@ -20,7 +20,7 @@ from app.stores import alert_store, anomaly_store, metrics_store
 logger = logging.getLogger(__name__)
 
 # Metrics to monitor and their window configurations
-_GPU_FIELDS = ["gpu_temp_c", "gpu_utilization_pct"]
+_GPU_FIELDS = ["gpu_temp_c"]
 _TRAINING_FIELDS = ["gradient_norm", "loss", "throughput_tps"]
 
 # Z-score threshold for alert generation
@@ -40,26 +40,30 @@ _FIELD_TO_ALERT_TYPE: dict[str, str] = {
 
 _FIELD_TO_SEVERITY: dict[str, str] = {
     "gpu_temp_c": "WARNING",
-    "gpu_utilization_pct": "WARNING",
     "gradient_norm": "CRITICAL",
     "loss": "CRITICAL",
     "throughput_tps": "WARNING",
 }
 
+# Deduplication: suppress repeat alerts for the same (node_id, alert_type) within 60s
+_last_alerted: dict[tuple[str, str], float] = {}
+_DEDUP_COOLDOWN_SECONDS = 60.0
+
 
 def _compute_zscore(values: list[float]) -> float | None:
-    """Compute the z-score of the last value relative to the series.
+    """Compute the z-score of the last value relative to the baseline (all but last).
 
-    Returns None if there are fewer than 10 data points or zero variance.
+    Returns None if there are fewer than 30 data points or zero variance.
     """
-    if len(values) < 10:
+    if len(values) < 30:
         return None
     arr = np.array(values, dtype=np.float64)
-    mean = np.mean(arr)
-    std = np.std(arr)
+    baseline = arr[:-1]
+    mean = float(np.mean(baseline))
+    std = float(np.std(baseline))
     if std < 1e-9:
         return None
-    return float((arr[-1] - mean) / std)
+    return (float(arr[-1]) - mean) / std
 
 
 def _make_alert(
@@ -114,6 +118,16 @@ def run_zscore_detection() -> list[AnomalyModel]:
                 values = metrics_store.get_gpu_metric_series(node_id, field, window)
                 z = _compute_zscore(values)
                 if z is not None and abs(z) > _ZSCORE_THRESHOLD:
+                    alert_type = _FIELD_TO_ALERT_TYPE.get(field, "unspecified")
+                    dedup_key = (node_id, alert_type)
+                    now = time.time()
+                    if dedup_key in _last_alerted and (now - _last_alerted[dedup_key]) < _DEDUP_COOLDOWN_SECONDS:
+                        logger.debug(
+                            "Z-score alert suppressed (dedup): node=%s type=%s cooldown_remaining=%.1fs",
+                            node_id, alert_type, _DEDUP_COOLDOWN_SECONDS - (now - _last_alerted[dedup_key]),
+                        )
+                        continue
+                    _last_alerted[dedup_key] = now
                     alert, anomaly = _make_alert(node_id, field, z, window)
                     alert_store.add(alert)
                     anomaly_store.add(anomaly.model_dump())
@@ -128,6 +142,16 @@ def run_zscore_detection() -> list[AnomalyModel]:
                 values = metrics_store.get_training_metric_series(node_id, field, window)
                 z = _compute_zscore(values)
                 if z is not None and abs(z) > _ZSCORE_THRESHOLD:
+                    alert_type = _FIELD_TO_ALERT_TYPE.get(field, "unspecified")
+                    dedup_key = (node_id, alert_type)
+                    now = time.time()
+                    if dedup_key in _last_alerted and (now - _last_alerted[dedup_key]) < _DEDUP_COOLDOWN_SECONDS:
+                        logger.debug(
+                            "Z-score alert suppressed (dedup): node=%s type=%s cooldown_remaining=%.1fs",
+                            node_id, alert_type, _DEDUP_COOLDOWN_SECONDS - (now - _last_alerted[dedup_key]),
+                        )
+                        continue
+                    _last_alerted[dedup_key] = now
                     alert, anomaly = _make_alert(node_id, field, z, window)
                     alert_store.add(alert)
                     anomaly_store.add(anomaly.model_dump())
@@ -136,5 +160,11 @@ def run_zscore_detection() -> list[AnomalyModel]:
                         "Z-score alert: node=%s field=%s z=%.2f window=%dmin",
                         node_id, field, z, window,
                     )
+
+    # Evict stale dedup entries to prevent unbounded growth
+    cutoff = time.time() - _DEDUP_COOLDOWN_SECONDS * 2
+    expired = [k for k, v in _last_alerted.items() if v < cutoff]
+    for k in expired:
+        del _last_alerted[k]
 
     return findings

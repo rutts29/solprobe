@@ -75,6 +75,23 @@ describe("solprobe-escrow", () => {
     assert.equal(escrow.releasedAmount.toNumber(), 1_000_000_000); // Both allocations handled
   });
 
+  it("rejects close_job before all workers settled", async () => {
+    const unsettledJobId = "escrow-unsettled-001";
+    const w = anchor.web3.Keypair.generate();
+
+    await program.methods
+      .createJob(unsettledJobId, [w.publicKey], new anchor.BN(100_000_000))
+      .accounts({})
+      .rpc();
+
+    try {
+      await program.methods.closeJob(unsettledJobId).accounts({}).rpc();
+      assert.fail("Should have thrown WorkersNotSettled");
+    } catch (err) {
+      assert.include(err.toString(), "WorkersNotSettled");
+    }
+  });
+
   it("closes job and reclaims remaining", async () => {
     await program.methods.closeJob(jobId).accounts({}).rpc();
 

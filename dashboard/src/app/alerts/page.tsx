@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AlertTimeline } from "@/components/alerts/alert-timeline";
 import { AlertDetail } from "@/components/alerts/alert-detail";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,11 +21,19 @@ export default function AlertsPage() {
   const ws = useWebSocket();
 
   const onAlert = useCallback(
-    (msg: { type: "alert"; data: AlertModel }) => prepend(msg.data),
-    [prepend]
+    (msg: { type: "alert"; data: AlertModel }) => {
+      if (severity === "ALL" || msg.data.severity === severity) {
+        prepend(msg.data);
+      }
+    },
+    [prepend, severity]
   );
 
   useRealtime(ws.subscribe, { onAlert });
+
+  useEffect(() => {
+    setSelectedAlert(null);
+  }, [severity]);
 
   return (
     <div className="space-y-6">
