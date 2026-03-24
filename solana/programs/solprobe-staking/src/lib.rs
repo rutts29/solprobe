@@ -77,19 +77,25 @@ pub mod solprobe_staking {
         let clock = Clock::get()?;
         let config = &ctx.accounts.stake_config;
 
-        // Transfer lamports from vault to admin
+        // Transfer lamports from vault to admin via PDA signer
         let worker_key = ctx.accounts.worker.key();
-        let vault_seeds: &[&[u8]] = &[
+        let signer_seeds: &[&[&[u8]]] = &[&[
             b"stake_vault",
             worker_key.as_ref(),
             &[ctx.bumps.stake_vault],
-        ];
+        ]];
 
-        let vault_info = ctx.accounts.stake_vault.to_account_info();
-        let admin_info = ctx.accounts.admin.to_account_info();
-
-        **vault_info.try_borrow_mut_lamports()? -= amount;
-        **admin_info.try_borrow_mut_lamports()? += amount;
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.stake_vault.to_account_info(),
+                    to: ctx.accounts.admin.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+        )?;
 
         stake_account.staked_lamports = stake_account.staked_lamports.saturating_sub(amount);
         stake_account.slash_count = stake_account.slash_count.checked_add(1).unwrap();
@@ -118,12 +124,25 @@ pub mod solprobe_staking {
 
         let amount = stake_account.staked_lamports;
 
-        // Transfer all lamports from vault back to worker
-        let vault_info = ctx.accounts.stake_vault.to_account_info();
-        let worker_info = ctx.accounts.worker.to_account_info();
+        // Transfer all lamports from vault back to worker via PDA signer
+        let worker_key = ctx.accounts.worker.key();
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            b"stake_vault",
+            worker_key.as_ref(),
+            &[ctx.bumps.stake_vault],
+        ]];
 
-        **vault_info.try_borrow_mut_lamports()? -= amount;
-        **worker_info.try_borrow_mut_lamports()? += amount;
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.stake_vault.to_account_info(),
+                    to: ctx.accounts.worker.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+        )?;
 
         stake_account.staked_lamports = 0;
         stake_account.active = false;
@@ -243,6 +262,7 @@ pub struct Unstake<'info> {
         mut,
         seeds = [b"stake_account", worker.key().as_ref()],
         bump = stake_account.bump,
+        close = worker,
     )]
     pub stake_account: Account<'info, StakeAccount>,
 
