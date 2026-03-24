@@ -7,7 +7,8 @@ services:
     ports:
       - "9100:9100"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   backend:
     build:
@@ -16,6 +17,24 @@ services:
     ports:
       - "8000:8000"
       - "50051:50051"
+    env_file: [.env]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:latest

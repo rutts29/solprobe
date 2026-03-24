@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -181,7 +182,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     set_event_loop(asyncio.get_running_loop())
 
     # Start gRPC server (runs in its own thread pool)
-    start_grpc_server(port=50051)
+    start_grpc_server(port=int(os.environ.get("GRPC_PORT", "50051")))
 
     # Launch background detector loops
     _background_tasks.append(asyncio.create_task(_zscore_loop()))
@@ -224,7 +225,7 @@ app = FastAPI(
 # CORS — allow dashboard dev server and common local origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
