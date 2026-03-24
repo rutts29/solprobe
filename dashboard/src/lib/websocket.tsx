@@ -62,26 +62,28 @@ function useWebSocketInternal(): WebSocketContextValue {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (unmounted) return;
         setState((s) => ({ ...s, connected: true }));
         reconnectDelay.current = 1000;
       };
 
       ws.onclose = () => {
+        if (unmounted) return;
         setState((s) => ({ ...s, connected: false }));
-        if (!unmounted) {
-          reconnectTimer.current = setTimeout(() => {
-            reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY);
-            connect();
-          }, reconnectDelay.current);
-        }
+        reconnectTimer.current = setTimeout(() => {
+          reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY);
+          connect();
+        }, reconnectDelay.current);
       };
 
       ws.onerror = (event) => {
+        // Don't call ws.close() — browser fires onclose automatically after onerror.
+        // Explicit close() triggers a second onclose, creating duplicate reconnect timers.
         console.error("[WebSocket] error:", event);
-        ws.close();
       };
 
       ws.onmessage = (event) => {
+        if (unmounted) return;
         let msg: WebSocketMessage;
         try {
           msg = JSON.parse(event.data);
