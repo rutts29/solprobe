@@ -28,12 +28,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Update connected nodes from WS metric summaries
   useEffect(() => {
     const count = Object.keys(ws.nodeStatuses).length;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing WS external state
     if (count > 0) setConnectedNodes(count);
   }, [ws.nodeStatuses]);
 
-  // Track critical alerts
+  // Accumulate count from WebSocket event stream — not derived state
   useEffect(() => {
     if (ws.lastAlert?.severity === "CRITICAL") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- event accumulator, not derivable
       setCriticalAlerts((c) => c + 1);
     }
   }, [ws.lastAlert]);
