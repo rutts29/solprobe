@@ -103,7 +103,7 @@ solprobe/
 
 ### Prerequisites
 
-- Rust 1.94+, Python 3.11+, Node 20+
+- Rust 1.94+, Python 3.12+, Node 22+
 - protoc (`brew install protobuf`)
 - Solana CLI 3.x + Anchor CLI 0.30.1 (with anchor-lang 0.32.1) (for Solana programs)
 
