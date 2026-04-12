@@ -14,20 +14,16 @@ import uuid
 
 import numpy as np
 
+from app.detectors.config import detection_config as _cfg
 from app.models.alerts import AlertModel, AnomalyModel
 from app.stores import alert_store, anomaly_store, metrics_store
 
 logger = logging.getLogger(__name__)
 
-# Metrics to monitor and their window configurations
-_GPU_FIELDS = ["gpu_temp_c"]
-_TRAINING_FIELDS = ["gradient_norm", "loss", "throughput_tps"]
-
-# Z-score threshold for alert generation
-_ZSCORE_THRESHOLD = 3.0
-
-# Time windows in minutes
-_WINDOWS = [5, 15, 60]
+_GPU_FIELDS = _cfg.zscore_gpu_fields
+_TRAINING_FIELDS = _cfg.zscore_training_fields
+_ZSCORE_THRESHOLD = _cfg.zscore_threshold
+_WINDOWS = _cfg.zscore_windows_minutes
 
 # Human-readable alert type mapping
 _FIELD_TO_ALERT_TYPE: dict[str, str] = {
@@ -47,7 +43,7 @@ _FIELD_TO_SEVERITY: dict[str, str] = {
 
 # Deduplication: suppress repeat alerts for the same (node_id, alert_type) within 60s
 _last_alerted: dict[tuple[str, str], float] = {}
-_DEDUP_COOLDOWN_SECONDS = 60.0
+_DEDUP_COOLDOWN_SECONDS = _cfg.zscore_dedup_cooldown_seconds
 
 
 def _compute_zscore(values: list[float]) -> float | None:
@@ -55,7 +51,7 @@ def _compute_zscore(values: list[float]) -> float | None:
 
     Returns None if there are fewer than 30 data points or zero variance.
     """
-    if len(values) < 30:
+    if len(values) < _cfg.zscore_min_samples:
         return None
     arr = np.array(values, dtype=np.float64)
     baseline = arr[:-1]

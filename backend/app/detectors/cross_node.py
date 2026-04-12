@@ -15,13 +15,14 @@ import uuid
 
 import numpy as np
 
+from app.detectors.config import detection_config as _cfg
 from app.models.alerts import AlertModel, AnomalyModel
 from app.stores import alert_store, anomaly_store, metrics_store
 
 logger = logging.getLogger(__name__)
 
-_STRAGGLER_RATIO = 0.80  # throughput must be < 80% of cluster mean
-_CORRELATION_WINDOW_MS = 30_000  # 30 seconds
+_STRAGGLER_RATIO = _cfg.straggler_ratio
+_CORRELATION_WINDOW_MS = _cfg.correlation_window_ms
 
 
 def _detect_stragglers(window_minutes: int = 5) -> list[AnomalyModel]:

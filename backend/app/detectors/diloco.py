@@ -17,14 +17,14 @@ import uuid
 import numpy as np
 
 from app.models.alerts import AlertModel, AnomalyModel
+from app.detectors.config import detection_config as _cfg
 from app.stores import alert_store, anomaly_store, metrics_store
 
 logger = logging.getLogger(__name__)
 
-# Thresholds
-_DIVERGENCE_OUTER_STEPS = 3  # require 3+ outer steps of divergence
-_SYNC_SPIKE_FACTOR = 2.0  # sync_duration > 2x historical mean
-_ZSCORE_THRESHOLD = 3.0  # for pseudo-grad norm drift
+_DIVERGENCE_OUTER_STEPS = _cfg.diloco_divergence_outer_steps
+_SYNC_SPIKE_FACTOR = _cfg.diloco_sync_spike_factor
+_ZSCORE_THRESHOLD = _cfg.diloco_zscore_threshold
 
 # Track last-seen outer_step per node to detect increments
 _last_outer_step: dict[str, int] = {}
