@@ -66,6 +66,8 @@ impl AppleSiliconCollector {
         let tiler_util = perf_stats.get("Tiler Utilization %").copied().unwrap_or(0);
         let in_use_bytes = perf_stats.get("In use system memory").copied().unwrap_or(0);
 
+        // "In use system memory" = Metal GPU allocations from unified pool (typically 200-900 MB idle).
+        // fb_free_mb is the remainder of the total addressable pool, not OS-level free RAM.
         let fb_used_mb = (in_use_bytes as f64 / 1_048_576.0) as f32;
         let fb_free_mb = (vram_total_mb - fb_used_mb).max(0.0);
 

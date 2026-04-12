@@ -8,17 +8,18 @@ Portfolio project targeting MTS Full-Stack role at Prime Intellect.
 
 | SP | Component | Status | Key Stats |
 |----|-----------|--------|-----------|
-| SP-1 | Rust Metrics Sidecar | Done | 25 Rust tests, 0 warnings, simulator + fault injection |
-| SP-2 | FastAPI Backend | Done | 127 Python tests, gRPC + REST + WebSocket, central detectors |
+| SP-1 | Rust Metrics Sidecar | Done | 28 Rust tests, 0 warnings, simulator + fault injection + Apple Silicon collector |
+| SP-2 | FastAPI Backend | Done | 132 Python tests, gRPC + REST + WebSocket, central detectors |
 | SP-3 | LLM Diagnosis Agent | Done | Claude API, 7 recovery actions, rate limiter, RAG |
 | SP-4 | Next.js Dashboard | Done | 55 files, 4 pages, real-time WebSocket, Recharts |
 | SP-5 | K8s + IaC | Done | Helm chart, Terraform (GKE), Ansible, Grafana dashboards |
 | SP-6 | Solana Trust Layer | Done | 4 Anchor programs (attestation, escrow, reputation, staking) |
 
 ## Remaining Work (Polish / Demo)
-- Full-stack smoke test (sidecar + backend + dashboard together)
-- `anchor test` on localnet for SP-6
-- README.md with architecture diagram + setup instructions
+- ~~Full-stack smoke test~~ **DONE** — 2 sidecars + backend + dashboard verified
+- ~~`anchor test` on localnet~~ **DONE** — 19/19 passing
+- ~~README.md with architecture diagram~~ **DONE** — includes Apple Silicon + MPS sections
+- ~~GitHub Actions CI~~ **DONE** — Rust + Python + Dashboard parallel jobs
 - GCP T4/L4 validation (optional, needs cloud access)
 - Demo recording
 

@@ -166,11 +166,11 @@ anchor test  # runs on localnet
 
 | Component | Tests | Command |
 |-----------|-------|---------|
-| Rust sidecar | 25 | `cd sidecar && cargo test` |
-| Python backend | 127 | `cd backend && python -m pytest tests/ -v` |
-| Solana programs | 15 | `cd solana && anchor test` |
+| Rust sidecar | 28 | `cd sidecar && cargo test` |
+| Python backend | 132 | `cd backend && python -m pytest tests/ -v` |
+| Solana programs | 19 | `cd solana && anchor test` |
 | E2E integration | 10 | `./scripts/e2e_test.sh` |
-| **Total** | **177** | |
+| **Total** | **189** | |
 
 ## API Endpoints
 
@@ -204,9 +204,43 @@ The `infra/` directory contains production-ready IaC:
 | 9100 | Sidecar Prometheus exporter |
 | 50051 | gRPC (sidecar to backend) |
 
+## Local Development (Apple Silicon)
+
+SolProbe runs fully on Apple Silicon Macs for local development and testing — no cloud GPU required.
+
+### Apple Silicon GPU Monitoring
+
+```bash
+cd sidecar
+cargo run -- --apple-gpu --node-id node-mac
+# Reads real GPU metrics via IOKit: utilization, Metal memory, renderer/tiler activity
+```
+
+The `--apple-gpu` collector maps Apple Silicon's unified memory model to SolProbe's metric schema:
+- `Device Utilization %` → `gpu_utilization_pct`
+- `In use system memory` → `fb_used_mb` (Metal GPU allocations, not total RAM)
+- `Renderer Utilization %` → `sm_active_pct`
+- `Tiler Utilization %` → `tensor_active_pct`
+
+### MPS Training Demo
+
+```bash
+cd training && python3 -m venv .venv && .venv/bin/pip install torch
+cd .. && training/.venv/bin/python -m training.train_mps --steps 30
+# TinyGPT (~867K params) training on Metal Performance Shaders
+# SolProbe callback writes metrics to shared memory for sidecar integration
+
+# Test with anomaly injection:
+training/.venv/bin/python -m training.train_mps --steps 30 --inject-spike-at 5
+```
+
+### Architecture Explorer
+
+Open `solprobe-playground.html` in a browser for an interactive visualization of the full system architecture.
+
 ## GPU Scope
 
-SolProbe targets **T4** (Turing, 16GB GDDR6) and **L4** (Ada Lovelace, 24GB GDDR6) — the GPUs commonly used in cost-efficient distributed training. No NVLink, no HBM, no MIG — those require different detection strategies.
+SolProbe targets **T4** (Turing, 16GB GDDR6) and **L4** (Ada Lovelace, 24GB GDDR6) in production. The Apple Silicon collector enables local development on M-series Macs. No NVLink, no HBM, no MIG — those require different detection strategies.
 
 ## License
 

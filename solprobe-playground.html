@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SolProbe Architecture Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;--panel:#060608;--border:#1a1a1a;--text:#e8e8f0;--muted:#707088;
+  --font-ui:'Outfit',system-ui,-apple-system,sans-serif;--font-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;--font-display:'Orbitron',var(--font-ui);
+  --blue:#3b82f6;--amber:#f59e0b;--purple:#a855f7;--emerald:#10b981;--cyan:#06b6d4;
+  --pink:#ec4899;--gray:#6b7280;--red:#ef4444;--orange:#f97316;--yellow:#eab308;
+  --glow-blue:0 0 16px rgba(59,130,246,.4);--glow-amber:0 0 16px rgba(245,158,11,.4);--glow-purple:0 0 16px rgba(168,85,247,.4);--glow-emerald:0 0 16px rgba(16,185,129,.4);--glow-cyan:0 0 16px rgba(6,182,212,.4);--glow-pink:0 0 16px rgba(236,72,153,.4);
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:13px}
+.app{display:grid;grid-template-columns:var(--sidebar-w,300px) 1fr;grid-template-rows:52px 1fr 28px;height:100vh;transition:grid-template-rows .25s ease,grid-template-columns .25s ease}
+.sidebar{grid-column:1;grid-row:2/4;background:var(--panel);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;width:300px;transition:width .25s ease,padding .25s ease}
+.sidebar.collapsed{width:36px;min-width:36px}
+.sidebar-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;flex-shrink:0}
+.sidebar-toggle{background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:14px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.sidebar-toggle:hover{color:var(--text);border-color:var(--text)}
+.sidebar-content{flex:1;overflow-y:auto;padding:0 14px 14px;display:flex;flex-direction:column;gap:14px}
+.sidebar-content::-webkit-scrollbar{width:5px}
+.sidebar-content::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+.sidebar.collapsed .sidebar-content,.sidebar.collapsed .tab-bar,.sidebar.collapsed .sidebar-header h2,.sidebar.collapsed .sidebar-header .badge{display:none}
+.sidebar.collapsed .sidebar-header{justify-content:center;padding:12px 6px 8px}
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin:0 14px;flex-shrink:0}
+.tab-btn{flex:1;padding:7px 0;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-family:var(--font-ui);font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;transition:all .15s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab-pane{display:none}
+.tab-pane.active{display:flex;flex-direction:column;gap:14px}
+.about-text{font-size:12px;line-height:1.7;color:var(--muted)}
+.about-text strong{color:var(--text);font-weight:600}
+.about-text a{color:var(--cyan);text-decoration:none}
+.about-text a:hover{text-decoration:underline}
+.about-section{margin-top:4px}
+.about-section h3{margin-bottom:6px}
+.tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.tech-item{padding:5px 7px;background:#0c0c10;border:1px solid var(--border);border-radius:4px;font-size:10.5px}
+.tech-item .tech-name{color:var(--text);font-weight:500}
+.tech-item .tech-ver{color:var(--muted);font-family:var(--font-mono);font-size:9.5px}
+.sidebar::-webkit-scrollbar{width:5px}
+.sidebar::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+.canvas-wrap{grid-column:2;grid-row:2;position:relative;overflow:hidden;background:radial-gradient(circle at 1px 1px,rgba(255,255,255,.05) 1px,transparent 0);background-size:22px 22px;background-color:var(--bg)}
+.prompt-panel{grid-column:2;grid-row:3;background:var(--panel);border-top:1px solid var(--border);padding:0;display:flex;flex-direction:column;overflow:hidden;transition:grid-template-rows .25s ease}
+.prompt-header{display:flex;align-items:center;justify-content:space-between;padding:6px 14px;cursor:pointer;user-select:none}
+.prompt-header h3{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:0}
+.prompt-toggle{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;transition:transform .25s;padding:2px 4px;line-height:1}
+.prompt-toggle.collapsed{transform:rotate(180deg)}
+.prompt-body{display:flex;gap:10px;padding:0 14px 10px;align-items:flex-start;overflow:hidden;transition:max-height .25s ease,opacity .2s ease,padding .25s ease}
+.prompt-body.collapsed{max-height:0;opacity:0;padding-top:0;padding-bottom:0}
+.prompt-text{flex:1;font-family:var(--font-mono);font-size:11.5px;line-height:1.5;color:var(--muted);white-space:pre-wrap;overflow-y:auto;max-height:130px;padding:8px;background:#040406;border-radius:6px;border:1px solid var(--border)}
+.copy-btn{padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:var(--font-ui);font-size:12px;font-weight:600;white-space:nowrap;transition:all .15s}
+.copy-btn:hover{background:#2563eb}
+.copy-btn.copied{background:var(--emerald)}
+h2{font-family:var(--font-display);font-size:13px;font-weight:700;color:var(--text);letter-spacing:1.5px}
+h3{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.section{display:flex;flex-direction:column;gap:5px}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.preset-btn{padding:5px 7px;background:#0a0a0c;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:11px;font-family:var(--font-ui);transition:all .15s;text-align:left}
+.preset-btn:hover{background:#1c1c1c;color:var(--text)}
+.preset-btn.active{background:#0a1428;border-color:var(--blue);color:var(--blue)}
+.toggle{display:flex;align-items:center;gap:7px;padding:3px 0;cursor:pointer;user-select:none}
+.toggle input{display:none}
+.toggle .box{width:13px;height:13px;border-radius:3px;border:2px solid var(--border);transition:all .15s;flex-shrink:0}
+.toggle input:checked+.box{border-color:var(--tcolor,var(--blue));background:var(--tcolor,var(--blue))}
+.toggle .lbl{font-size:11.5px;color:var(--muted);transition:color .15s}
+.toggle:hover .lbl{color:var(--text)}
+.conn-toggle{display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;user-select:none}
+.conn-toggle input{display:none}
+.conn-line{width:18px;height:2px;flex-shrink:0;border-radius:1px;transition:opacity .15s}
+.conn-toggle input:not(:checked)~.conn-line{opacity:.25}
+.conn-toggle .lbl{font-size:11px;color:var(--muted)}
+.conn-toggle:hover .lbl{color:var(--text)}
+.comments-list{display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto}
+.comment-item{display:flex;align-items:flex-start;gap:5px;padding:5px 7px;background:#0c0c10;border-radius:4px;font-size:10.5px}
+.comment-target{color:var(--cyan);font-weight:600;flex-shrink:0}
+.comment-text{color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comment-del{background:none;border:none;color:#555;cursor:pointer;font-size:14px;line-height:1;padding:0 2px;flex-shrink:0}
+.comment-del:hover{color:var(--red)}
+.stats-bar{display:flex;gap:10px;font-size:10.5px;color:var(--muted);font-family:var(--font-mono)}
+.zoom-controls{position:absolute;top:10px;right:10px;display:flex;gap:3px;z-index:10}
+.zoom-btn{width:30px;height:30px;background:var(--panel);border:1px solid var(--border);border-radius:5px;color:var(--text);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.zoom-btn:hover{background:#1c1c1c}
+.flow-toggle{position:absolute;top:10px;left:10px;z-index:10;padding:5px 9px;background:var(--panel);border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:10.5px;font-family:var(--font-ui);transition:all .15s}
+.flow-toggle:hover,.flow-toggle.active{color:var(--cyan);border-color:var(--cyan)}
+svg{width:100%;height:100%;display:block}
+.node-group{cursor:pointer}
+.node-group:hover .node-rect{filter:brightness(1.35)}
+.node-group.dimmed{opacity:.12;pointer-events:none}
+.node-group.highlighted .node-rect{filter:brightness(1.5);stroke-width:2.5}
+.node-rect{rx:6;ry:6;stroke-width:1.5;transition:all .15s}
+.node-title{font-family:var(--font-ui);font-size:11px;font-weight:600;fill:var(--text);text-anchor:middle;pointer-events:none}
+.node-subtitle{font-family:var(--font-mono);font-size:8px;fill:var(--muted);text-anchor:middle;pointer-events:none}
+.conn-path{fill:none;stroke-width:1;opacity:.2;transition:opacity .25s,filter .25s}
+.conn-path.dimmed{opacity:.04}
+.conn-path.highlighted{stroke-width:2;opacity:1;filter:drop-shadow(0 0 3px currentColor)}
+.conn-label-text{font-family:var(--font-mono);font-size:7.5px;fill:var(--muted);text-anchor:middle;pointer-events:none;opacity:0;transition:opacity .15s}
+.conn-label-text.visible{opacity:.85}
+.layer-band{opacity:.035}
+.layer-label{font-family:var(--font-ui);font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;opacity:.35}
+.separator{height:1px;background:var(--border)}
+.empty-msg{color:var(--muted);font-size:10.5px;font-style:italic;padding:3px 0}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;width:360px;max-width:90vw}
+.modal-name{font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px}
+.modal-path{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin-bottom:10px}
+.modal textarea{width:100%;height:75px;background:#040406;border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-ui);font-size:12px;padding:8px;resize:vertical;outline:none}
+.modal textarea:focus{border-color:var(--blue)}
+.modal-btns{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}
+.modal-btns button{padding:5px 13px;border-radius:5px;border:none;cursor:pointer;font-family:var(--font-ui);font-size:12px;font-weight:600}
+.btn-cancel{background:#2a2a3a;color:var(--muted)}
+.btn-save{background:var(--blue);color:#fff}
+.btn-cancel:hover{background:#333}
+.btn-save:hover{background:#2563eb}
+.tooltip{position:fixed;background:#0c0c10;border:1px solid var(--border);border-radius:6px;padding:9px 11px;max-width:260px;z-index:50;pointer-events:none;opacity:0;transition:opacity .12s;font-size:10.5px;line-height:1.45;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+.tooltip.show{opacity:1}
+.tooltip-title{font-weight:700;color:var(--text);font-size:11.5px}
+.tooltip-path{font-family:var(--font-mono);color:var(--muted);font-size:9.5px;margin:1px 0 5px}
+.tooltip-detail{color:#aaa}
+.tooltip-hint{color:var(--cyan);font-size:9.5px;margin-top:5px}
+.title-row{display:flex;align-items:center;gap:7px;padding-bottom:2px}
+.badge{font-size:9.5px;font-family:var(--font-mono);padding:2px 5px;border-radius:3px;background:#0c0c10;color:var(--muted)}
+@keyframes flowAnim{0%{offset-distance:0%;opacity:0;transform:scale(.4)}6%{opacity:1;transform:scale(1)}88%{opacity:1;transform:scale(1)}100%{offset-distance:100%;opacity:0;transform:scale(.3)}}
+.flow-dot{pointer-events:none;display:none}
+.flow-dot.active{display:block;filter:brightness(1.6) drop-shadow(0 0 5px rgba(255,255,255,.5))}
+.header{grid-column:1/-1;grid-row:1;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:linear-gradient(90deg,#000 0%,#040406 40%,#060608 100%);border-bottom:1px solid var(--border);overflow:hidden;position:relative}
+.brand{display:flex;align-items:baseline;gap:14px}
+.brand-name{font-family:var(--font-display);font-size:17px;font-weight:900;letter-spacing:4px;background:linear-gradient(135deg,var(--cyan) 0%,var(--blue) 45%,var(--purple) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.brand-tag{font-size:11px;color:var(--muted);letter-spacing:.3px;font-weight:400}
+.header-stats{display:flex;gap:28px}
+.stat{display:flex;flex-direction:column;align-items:center;gap:1px}
+.stat-val{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--text);letter-spacing:1px}
+.stat-label{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;font-weight:500}
+.stat:nth-child(1) .stat-val{color:var(--emerald)}
+.stat:nth-child(2) .stat-val{color:var(--amber)}
+.stat:nth-child(3) .stat-val{color:var(--pink)}
+.stat:nth-child(4) .stat-val{color:var(--cyan)}
+.node-group:hover .node-rect{filter:brightness(1.5) drop-shadow(0 0 8px currentColor)}
+.node-group.highlighted .node-rect{filter:brightness(1.6) drop-shadow(0 0 12px currentColor);stroke-width:2.5}
+.conn-path{transition:opacity .15s,filter .15s}
+.conn-path.highlighted{filter:drop-shadow(0 0 4px currentColor)}
+@keyframes headerGlow{0%,100%{opacity:.4}50%{opacity:.8}}
+.header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),var(--blue),var(--purple),transparent);animation:headerGlow 4s ease-in-out infinite}
+.layer-band{opacity:.04;transition:opacity .3s}
+.node-title{font-family:var(--font-ui);font-weight:600}
+.node-subtitle{font-family:var(--font-mono)}
+.layer-label{font-family:var(--font-ui);font-weight:700}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="brand"><span class="brand-name" id="brand-name"></span><span class="brand-tag" id="brand-tag"></span></div>
+    <div class="header-stats" id="header-stats"></div>
+  </div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h2>Architecture</h2><span class="badge">v1.0</span>
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">&#9664;</button>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="explorer">Explorer</button>
+      <button class="tab-btn" data-tab="about">About</button>
+    </div>
+    <div class="sidebar-content">
+      <div class="tab-pane active" id="tab-explorer">
+        <div class="stats-bar" id="stats"></div>
+        <div class="separator"></div>
+        <div class="section"><h3>Presets</h3><div class="presets" id="presets"></div></div>
+        <div class="separator"></div>
+        <div class="section"><h3>Layers</h3><div id="layer-toggles"></div></div>
+        <div class="separator"></div>
+        <div class="section"><h3>Connections</h3><div id="conn-toggles"></div></div>
+        <div class="separator"></div>
+        <div class="section"><h3>Comments <span id="comment-count"></span></h3><div class="comments-list" id="comments-list"></div></div>
+      </div>
+      <div class="tab-pane" id="tab-about"><!-- generated from CONFIG.about --></div>
+      <div style="display:none">
+        <div class="about-section"><h3>_</h3>
+          <div class="about-text">
+            Existing tools detect crashes <em>after</em> they happen. SolProbe catches <strong>silent failures</strong> &mdash; thermal throttling, gradient explosions, NCCL timeouts, ECC errors &mdash; and diagnoses root causes before training runs are lost.
+          </div>
+        </div>
+        <div class="separator"></div>
+        <div class="about-section">
+          <h3>Key Capabilities</h3>
+          <div class="about-text">
+            &bull; <strong>Hybrid detection</strong> &mdash; edge thresholds in Rust (&lt;1s) + central statistical analysis in Python<br>
+            &bull; <strong>14 alert types</strong> &mdash; thermal, memory, XID, ECC, gradient, loss, NCCL, straggler, DiLoCo-specific<br>
+            &bull; <strong>LLM diagnosis</strong> &mdash; Claude API with structured tool_use, 7 recovery actions, RAG for similar incidents<br>
+            &bull; <strong>On-chain trust</strong> &mdash; 4 Solana Anchor programs for attestation, escrow, reputation, staking<br>
+            &bull; <strong>Apple Silicon</strong> &mdash; runs locally on M-series Macs via IOKit + MPS training demo
+          </div>
+        </div>
+        <div class="separator"></div>
+        <div class="about-section">
+          <h3>Tech Stack</h3>
+          <div class="tech-grid">
+            <div class="tech-item"><div class="tech-name">Rust Sidecar</div><div class="tech-ver">tonic + tokio</div></div>
+            <div class="tech-item"><div class="tech-name">Python Backend</div><div class="tech-ver">FastAPI + gRPC</div></div>
+            <div class="tech-item"><div class="tech-name">Dashboard</div><div class="tech-ver">Next.js 15</div></div>
+            <div class="tech-item"><div class="tech-name">Solana</div><div class="tech-ver">Anchor 0.32</div></div>
+            <div class="tech-item"><div class="tech-name">LLM Agent</div><div class="tech-ver">Claude Sonnet</div></div>
+            <div class="tech-item"><div class="tech-name">IaC</div><div class="tech-ver">Helm + Terraform</div></div>
+          </div>
+        </div>
+        <div class="separator"></div>
+        <div class="about-section">
+          <h3>Why Solana?</h3>
+          <div class="about-text">
+            In decentralized training networks like Prime Intellect's INTELLECT-2, workers are untrusted &mdash; anyone can contribute GPU compute. The system needs cryptographic proof that work was actually done, and economic incentives to punish cheating.<br><br>
+            <strong>Attestation</strong> &mdash; Workers submit on-chain checkpoint hashes + GPU metadata. Verifiers confirm training actually happened, not just empty cycles.<br>
+            <strong>Escrow</strong> &mdash; Job creators deposit SOL upfront. Workers get paid on verified completion, slashed on failure. No trust required.<br>
+            <strong>Reputation</strong> &mdash; On-chain worker profiles track completion rate and slash history. Bad actors get priced out over time.<br>
+            <strong>Staking</strong> &mdash; Workers stake SOL as collateral. Slashing links directly to SolProbe diagnosis IDs &mdash; the off-chain fault detection feeds the on-chain enforcement loop.<br><br>
+            Solana over Ethereum: 400ms finality, ~$0.001 per attestation vs $2+. At scale (thousands of checkpoints/hour), cost matters.
+          </div>
+        </div>
+        <div class="separator"></div>
+        <div class="about-section">
+          <h3>Test Coverage</h3>
+          <div class="about-text">
+            <strong>189 tests</strong> across 3 languages:<br>
+            &bull; 28 Rust (sidecar + collectors)<br>
+            &bull; 132 Python (backend + detectors + diagnosis)<br>
+            &bull; 19 Solana TypeScript (4 Anchor programs)<br>
+            &bull; 10 E2E integration
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="canvas-wrap" id="canvas-wrap">
+    <button class="flow-toggle active" id="flow-toggle">Flow</button>
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="zoom-in">+</button>
+      <button class="zoom-btn" id="zoom-out">&minus;</button>
+      <button class="zoom-btn" id="zoom-reset" style="font-size:10px">1:1</button>
+    </div>
+    <svg id="diagram" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="prompt-panel" id="prompt-panel">
+    <div class="prompt-header" id="prompt-header">
+      <h3>Prompt Output</h3>
+      <button class="prompt-toggle collapsed" id="prompt-toggle">&#9650;</button>
+    </div>
+    <div class="prompt-body collapsed" id="prompt-body">
+      <div class="prompt-text" id="prompt-output"></div>
+      <button class="copy-btn" id="copy-btn">Copy</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-name" id="modal-title"></div>
+    <div class="modal-path" id="modal-path"></div>
+    <textarea id="modal-text" placeholder="Add your feedback on this component..."></textarea>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="modal-cancel">Cancel</button>
+      <button class="btn-save" id="modal-save">Save</button>
+    </div>
+  </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ── Helpers ──────────────────────────────────────
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function el(tag,attrs,children){
+  const e=document.createElementNS(tag==='svg'||['g','rect','text','path','circle','polygon','marker','defs'].includes(tag)?'http://www.w3.org/2000/svg':'http://www.w3.org/1999/xhtml',tag);
+  if(attrs)Object.entries(attrs).forEach(([k,v])=>{if(k==='style'&&typeof v==='object'){Object.assign(e.style,v)}else if(k.startsWith('on')){e.addEventListener(k.slice(2),v)}else{e.setAttribute(k,String(v))}});
+  if(children){if(typeof children==='string')e.textContent=children;else if(Array.isArray(children))children.forEach(c=>{if(c)e.appendChild(c)})}
+  return e;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  CONFIGURATION — Edit this section to customize the architecture.      ║
+// ║  Everything below the CONFIG block is the rendering engine.            ║
+// ║  If window.ARCH_CONFIG exists, it will be used instead of defaults.    ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+const DEFAULT_CONFIG = {
+
+  // ── Header ──────────────────────────────────────
+  title: 'SOLPROBE',
+  tagline: 'Autonomous Fault Detection for Distributed Training',
+  version: 'v1.0',
+  stats: [
+    {value:'189', label:'Tests', color:'var(--emerald)'},
+    {value:'6', label:'Sub-projects', color:'var(--amber)'},
+    {value:'4', label:'Solana Programs', color:'var(--pink)'},
+    {value:'28', label:'Components', color:'var(--cyan)'}
+  ],
+
+  // ── About tab sections ──────────────────────────
+  about: [
+    {text:'<strong>SolProbe</strong> is an autonomous fault detection and recovery system for distributed GPU training. It monitors T4/L4 clusters in real-time, detects hardware and software anomalies before they cause failures, diagnoses root causes using an LLM agent, and records compute attestations on Solana.'},
+    {title:'Why SolProbe?', text:'Existing tools detect crashes <em>after</em> they happen. SolProbe catches <strong>silent failures</strong> — thermal throttling, gradient explosions, NCCL timeouts, ECC errors — and diagnoses root causes before training runs are lost.'},
+    {title:'Key Capabilities', text:'• <strong>Hybrid detection</strong> — edge thresholds in Rust (<1s) + central statistical analysis in Python<br>• <strong>14 alert types</strong> — thermal, memory, XID, ECC, gradient, loss, NCCL, straggler, DiLoCo-specific<br>• <strong>LLM diagnosis</strong> — Claude API with structured tool_use, 7 recovery actions, RAG for similar incidents<br>• <strong>On-chain trust</strong> — 4 Solana Anchor programs for attestation, escrow, reputation, staking<br>• <strong>Apple Silicon</strong> — runs locally on M-series Macs via IOKit + MPS training demo'},
+    {title:'Why Solana?', text:'In decentralized training networks like Prime Intellect\'s INTELLECT-2, workers are untrusted — anyone can contribute GPU compute. The system needs cryptographic proof that work was done, and economic incentives to punish cheating.<br><br><strong>Attestation</strong> — Workers submit on-chain checkpoint hashes + GPU metadata. Verifiers confirm training actually happened.<br><strong>Escrow</strong> — Job creators deposit SOL upfront. Workers get paid on verified completion, slashed on failure.<br><strong>Reputation</strong> — On-chain worker profiles track completion rate and slash history.<br><strong>Staking</strong> — Workers stake SOL as collateral. Slashing links directly to SolProbe diagnosis IDs.<br><br>Solana over Ethereum: 400ms finality, ~$0.001 per attestation vs $2+. At scale, cost matters.'},
+    {title:'Tech Stack', grid:[
+      {name:'Rust Sidecar',ver:'tonic + tokio'},{name:'Python Backend',ver:'FastAPI + gRPC'},
+      {name:'Dashboard',ver:'Next.js 15'},{name:'Solana',ver:'Anchor 0.32'},
+      {name:'LLM Agent',ver:'Claude Sonnet'},{name:'IaC',ver:'Helm + Terraform'}
+    ]},
+    {title:'Test Coverage', text:'<strong>189 tests</strong> across 3 languages:<br>• 28 Rust (sidecar + collectors)<br>• 132 Python (backend + detectors + diagnosis)<br>• 19 Solana TypeScript (4 Anchor programs)<br>• 10 E2E integration'}
+  ],
+
+  // ── Diagram viewbox ─────────────────────────────
+  viewBox: {width:1400, height:760},
+  nodeSize: {w:155, h:48},
+
+  // ── Layers ──────────────────────────────────────
+  layers: {
+    training:{label:'Training',color:'#3b82f6',bg:'#040a18'},
+    sidecar:{label:'Rust Sidecar',color:'#f59e0b',bg:'#0c0902'},
+    backend:{label:'FastAPI Backend',color:'#a855f7',bg:'#080514'},
+    intelligence:{label:'Detection & Diagnosis',color:'#10b981',bg:'#030c08'},
+    dashboard:{label:'Next.js Dashboard',color:'#06b6d4',bg:'#030a0c'},
+    solana:{label:'Solana Trust Layer',color:'#ec4899',bg:'#0c030a'},
+    external:{label:'External Services',color:'#6b7280',bg:'#080808'}
+  },
+
+  // ── Layer band positions ────────────────────────
+  layerBands: [
+    {layer:'training',y:22,h:60},{layer:'sidecar',y:142,h:60},
+    {layer:'backend',y:270,h:60},{layer:'intelligence',y:400,h:60},
+    {layer:'dashboard',y:528,h:60},{layer:'solana',y:656,h:60}
+  ],
+
+  // ── Connection types ────────────────────────────
+  connectionTypes: {
+    mmap:{label:'mmap IPC',color:'#f97316',dash:'6,3'},
+    grpc:{label:'gRPC',color:'#3b82f6',dash:''},
+    rest:{label:'REST API',color:'#10b981',dash:''},
+    websocket:{label:'WebSocket',color:'#06b6d4',dash:'8,4'},
+    prometheus:{label:'Prometheus',color:'#a855f7',dash:'3,3'},
+    api:{label:'Claude API',color:'#ef4444',dash:'6,3'},
+    reference:{label:'On-chain Ref',color:'#eab308',dash:'4,4'},
+    internal:{label:'Internal',color:'#4a4a60',dash:'2,2'}
+  },
+
+  // ── Nodes — {id, label, subtitle, x, y, layer, detail} ──
+  // w/h are auto-filled from nodeSize if omitted
+  nodes: [
+    {id:'callbacks',label:'SolProbe Callbacks',subtitle:'training/callback.py',x:140,y:46,layer:'training',detail:'PyTorch callbacks for training + DiLoCo. Writes 37B training struct (step, loss, grad_norm, lr, throughput, MFU) and 46B DiLoCo struct to mmap files every step.'},
+    {id:'simulator',label:'Training Simulator',subtitle:'training/simulate.py',x:390,y:58,layer:'training',detail:'Standalone simulator (no PyTorch). 4 scenarios: normal, gradient_explosion, loss_plateau, diloco_drift. Writes to same mmap binary format.'},
+    {id:'mps-train',label:'MPS Training Demo',subtitle:'training/train_mps.py',x:640,y:46,layer:'training',detail:'TinyGPT (~867K params) on Apple MPS. 94K tok/s post-warmup. --inject-spike-at N for anomaly demos. Uses SolProbeCallback for sidecar integration. Verified on M3 Pro.'},
+    {id:'mmap',label:'mmap Shared Memory',subtitle:'/tmp/solprobe_*.bin',x:920,y:58,layer:'training',detail:'Shared memory files at /tmp. 64-byte files, little-endian binary, 5s staleness check. Zero-copy IPC between Python training and Rust sidecar.'},
+    {id:'collectors',label:'Metric Collectors',subtitle:'sidecar/src/collectors/',x:160,y:172,layer:'sidecar',detail:'GPU (DCGM/Apple Silicon IOKit/Simulator) + training/diloco mmap readers. 1s collection loop. Apple Silicon maps unified memory via PerformanceStatistics. Fault injection: thermal, xid_79, memory_pressure, gradient_explosion, nccl_timeout.'},
+    {id:'threshold',label:'Threshold Detector',subtitle:'sidecar/src/detectors/',x:420,y:172,layer:'sidecar',detail:'Edge anomaly detection with sub-second latency. Thresholds: temp 80/85 C, memory 90/95%, grad_norm 10/100. Monitors 15 critical XID codes.'},
+    {id:'grpc-client',label:'gRPC Client',subtitle:'sidecar/src/transport/grpc.rs',x:680,y:172,layer:'sidecar',detail:'tonic gRPC client to backend :50051. StreamMetrics (client-streaming) + ReportAlert (unary). Persistent connection per sidecar.'},
+    {id:'prom-export',label:'Prometheus Exporter',subtitle:'sidecar/src/transport/prom.rs',x:960,y:172,layer:'sidecar',detail:'axum HTTP on :9100/metrics. 11 Prometheus gauges: gpu_temp, utilization, memory_pct, power, xid, ecc_sbe/dbe, clock_throttle, pcie_replay, sm_active, tensor_active.'},
+    {id:'grpc-server',label:'gRPC Server',subtitle:'backend/app/grpc_server.py',x:120,y:300,layer:'backend',detail:'grpcio server on :50051. Receives MetricsBatch client-streams + Alert unary RPCs from all sidecars. Routes to stores + WebSocket broadcast.'},
+    {id:'metrics-store',label:'Metrics Store',subtitle:'backend/app/stores.py',x:340,y:300,layer:'backend',detail:'Per-node ring buffer: deque(maxlen=1800) = ~30 min at 1/s. In-memory, queryable by node + time window. Feeds statistical detectors + REST API.'},
+    {id:'alert-store',label:'Alert Store',subtitle:'backend/app/stores.py',x:560,y:300,layer:'backend',detail:'deque(maxlen=1000). Queryable by node/severity/type. get_correlated() finds cross-node alerts in +/-30s window. Triggers auto-diagnosis for CRITICAL.'},
+    {id:'ws-hub',label:'WebSocket Hub',subtitle:'backend/app/ws/websocket.py',x:800,y:300,layer:'backend',detail:'ws://.../ws/stream. Pushes alert, metric_summary (5s), diagnosis events. Client-side filtering by node_ids + severity. Auto-reconnect with backoff.'},
+    {id:'rest-api',label:'REST API',subtitle:'backend/app/api/routes.py',x:1040,y:300,layer:'backend',detail:'15+ endpoints on :8000/api/v1. /nodes, /nodes/{id}/metrics, /alerts, /alerts/{id}/enriched, /anomalies, /diagnoses, /jobs. Also /metrics for Prometheus.'},
+    {id:'zscore',label:'Z-Score Detector',subtitle:'backend/app/detectors/zscore.py',x:140,y:430,layer:'intelligence',detail:'Every 10s. Monitors gpu_temp, gradient_norm, loss, throughput across 5/15/60 min windows. |z|>3.0, min 30 points. 60s dedup cooldown. Confidence = |z|/5.'},
+    {id:'crossnode',label:'Cross-Node Detector',subtitle:'backend/app/detectors/cross_node.py',x:380,y:430,layer:'intelligence',detail:'Every 15s. Straggler: throughput < 80% cluster mean (30 samples). Correlated failure: 2+ edge-source nodes with alerts in same 30s window => nccl_timeout.'},
+    {id:'diloco-det',label:'DiLoCo Detector',subtitle:'backend/app/detectors/diloco.py',x:620,y:430,layer:'intelligence',detail:'Every 15s. Inner/outer loss divergence (3+ outer steps). Sync duration spikes (>2x mean). Pseudo-gradient z-score per worker (|z|>3.0).'},
+    {id:'diagnosis',label:'LLM Diagnosis Agent',subtitle:'backend/app/diagnosis/agent.py',x:860,y:430,layer:'intelligence',detail:'Claude Sonnet via forced tool_use (submit_diagnosis). 15 root causes, 7 recovery actions. Pipeline: enrich alert -> RAG similar -> Claude -> store + broadcast.'},
+    {id:'rag-store',label:'RAG Store',subtitle:'backend/app/diagnosis/store.py',x:1080,y:430,layer:'intelligence',detail:'Max 500 diagnoses. find_similar(alert_type, limit=3) returns past completed diagnoses for in-context few-shot learning. Simple type-based matching.'},
+    {id:'overview',label:'Overview Page',subtitle:'dashboard/src/app/overview/',x:200,y:558,layer:'dashboard',detail:'Health cards (node count, alert count, active jobs) + cluster summary + recent alerts. Real-time via WebSocket metric_summary events.'},
+    {id:'node-detail',label:'Node Detail',subtitle:'dashboard/src/app/nodes/[id]/',x:460,y:558,layer:'dashboard',detail:'Per-node GPU charts: TempChart (warn/crit lines 80/85 C), UtilizationChart, ThroughputChart, LossChart, DilocoCharts. Auto-refresh every 5s.'},
+    {id:'alerts-page',label:'Alerts Timeline',subtitle:'dashboard/src/app/alerts/',x:720,y:558,layer:'dashboard',detail:'Filterable alert timeline. Severity/type/node filters. Alert detail panel with description, evidence, and linked diagnosis if available.'},
+    {id:'diagnoses-page',label:'Diagnoses View',subtitle:'dashboard/src/app/diagnoses/',x:980,y:558,layer:'dashboard',detail:'Diagnosis cards: root cause, confidence %, evidence chain, reasoning, recommended action (7 types), urgency level. Linked to source alerts.'},
+    {id:'attestation',label:'Attestation',subtitle:'solana/programs/attestation/',x:200,y:686,layer:'solana',detail:'PDA: [attestation, job_id, step, worker]. On-chain proof of training checkpoint. submit_attestation(job_id, step, checkpoint_hash, gpu_model, metrics_hash).'},
+    {id:'escrow',label:'Escrow',subtitle:'solana/programs/escrow/',x:460,y:686,layer:'solana',detail:'SOL vault per job (max 10 workers). create_job -> release_payment / slash_payment -> close_job. Slash transfers from vault back to creator with evidence_hash.'},
+    {id:'reputation',label:'Reputation',subtitle:'solana/programs/reputation/',x:720,y:686,layer:'solana',detail:'Worker profile PDA. Score = (completed * 10000) / total_jobs. Starts at 100% (10000). record_completion() / record_failure(slash_amount).'},
+    {id:'staking',label:'Staking',subtitle:'solana/programs/staking/',x:980,y:686,layer:'solana',detail:'SOL stake with cooldown. slash(amount, reason_hash, diagnosis_id) links on-chain slash to off-chain SolProbe diagnosis. Deactivates on full slash.'},
+    {id:'claude-api',label:'Claude API',subtitle:'claude-sonnet-4-20250514',x:1280,y:430,w:130,layer:'external',detail:'Claude Sonnet 4. 1024 max tokens per diagnosis. Forced tool_use (submit_diagnosis). Handles RateLimitError, APITimeoutError gracefully.'},
+    {id:'prometheus',label:'Prometheus',subtitle:'prometheus:9090',x:1280,y:236,w:130,layer:'external',detail:'Scrapes sidecar :9100 + backend :8000 every 5s. Alertmanager routes CRITICAL/WARNING via webhook. Grafana dashboards for GPU + training health.'}
+  ],
+
+  // ── Connections — {from, to, type, label} ───────
+  connections: [
+    {from:'callbacks',to:'mmap',type:'mmap',label:'37B/46B binary'},
+    {from:'simulator',to:'mmap',type:'mmap',label:'Simulated data'},
+    {from:'mps-train',to:'mmap',type:'mmap',label:'MPS callback'},
+    {from:'mmap',to:'collectors',type:'mmap',label:'mmap read 1s'},
+    {from:'collectors',to:'threshold',type:'internal',label:'MetricsBatch'},
+    {from:'collectors',to:'grpc-client',type:'internal',label:'Stream batch'},
+    {from:'collectors',to:'prom-export',type:'internal',label:'Gauge update'},
+    {from:'threshold',to:'grpc-client',type:'internal',label:'Edge alerts'},
+    {from:'grpc-client',to:'grpc-server',type:'grpc',label:':50051 streaming'},
+    {from:'prom-export',to:'prometheus',type:'prometheus',label:'Scrape :9100'},
+    {from:'grpc-server',to:'metrics-store',type:'internal',label:'Store batch'},
+    {from:'grpc-server',to:'alert-store',type:'internal',label:'Store alert'},
+    {from:'metrics-store',to:'zscore',type:'internal',label:'Window data'},
+    {from:'metrics-store',to:'crossnode',type:'internal',label:'Node samples'},
+    {from:'metrics-store',to:'diloco-det',type:'internal',label:'Outer steps'},
+    {from:'zscore',to:'alert-store',type:'internal',label:'Anomaly'},
+    {from:'crossnode',to:'alert-store',type:'internal',label:'Straggler alert'},
+    {from:'diloco-det',to:'alert-store',type:'internal',label:'DiLoCo anomaly'},
+    {from:'alert-store',to:'diagnosis',type:'internal',label:'Enriched alert'},
+    {from:'rag-store',to:'diagnosis',type:'internal',label:'Similar incidents'},
+    {from:'alert-store',to:'ws-hub',type:'internal',label:'Alert broadcast'},
+    {from:'metrics-store',to:'ws-hub',type:'internal',label:'Summary 5s'},
+    {from:'diagnosis',to:'claude-api',type:'api',label:'Claude Sonnet'},
+    {from:'ws-hub',to:'overview',type:'websocket',label:'Push updates'},
+    {from:'ws-hub',to:'alerts-page',type:'websocket',label:'Alert stream'},
+    {from:'ws-hub',to:'diagnoses-page',type:'websocket',label:'Diagnosis stream'},
+    {from:'rest-api',to:'overview',type:'rest',label:'GET /nodes'},
+    {from:'rest-api',to:'node-detail',type:'rest',label:'GET /nodes/{id}'},
+    {from:'rest-api',to:'alerts-page',type:'rest',label:'GET /alerts'},
+    {from:'rest-api',to:'diagnoses-page',type:'rest',label:'GET /diagnoses'},
+    {from:'rest-api',to:'prometheus',type:'prometheus',label:'Scrape :8000'},
+    {from:'diagnosis',to:'staking',type:'reference',label:'diagnosis_id -> slash()'},
+    {from:'callbacks',to:'attestation',type:'reference',label:'checkpoint_hash on-chain'},
+    {from:'escrow',to:'reputation',type:'reference',label:'Job completion'}
+  ],
+
+  // ── Presets ─────────────────────────────────────
+  presets: {
+    full:{label:'Full System',layers:null,conns:null},
+    pipeline:{label:'Data Pipeline',layers:['training','sidecar','backend','intelligence','external'],conns:['mmap','grpc','internal','api']},
+    detection:{label:'Fault Detection',layers:['sidecar','backend','intelligence','external'],conns:['grpc','internal','api']},
+    realtime:{label:'Real-time Flow',layers:['backend','dashboard'],conns:['rest','websocket','internal']},
+    trust:{label:'Solana Trust',layers:['intelligence','solana','dashboard','external'],conns:['reference','api','rest','websocket']},
+    edge:{label:'Edge Processing',layers:['training','sidecar','external'],conns:['mmap','internal','prometheus']},
+    apple:{label:'Apple Silicon',layers:['training','sidecar','backend','intelligence','dashboard'],conns:['mmap','grpc','internal','rest','websocket']}
+  }
+};
+
+// Merge user config over defaults: window.ARCH_CONFIG overrides any key
+const CONFIG = typeof window.ARCH_CONFIG === 'object'
+  ? Object.assign({}, DEFAULT_CONFIG, window.ARCH_CONFIG)
+  : DEFAULT_CONFIG;
+
+// ── Unpack config into engine variables ───────────
+const LAYERS = CONFIG.layers;
+const CONN_TYPES = CONFIG.connectionTypes;
+const W = CONFIG.nodeSize.w, H = CONFIG.nodeSize.h;
+const nodes = CONFIG.nodes.map(function(n){ return Object.assign({w:W,h:H}, n) });
+const nodeMap={};nodes.forEach(n=>nodeMap[n.id]=n);
+const connections = CONFIG.connections;
+const layerBands = CONFIG.layerBands;
+const VBW = CONFIG.viewBox.width, VBH = CONFIG.viewBox.height;
+
+// ── State ────────────────────────────────────────
+const state={layers:{},connTypes:{},comments:[],zoom:1,panX:0,panY:0,hoveredNode:null,activePreset:'full',flowAnim:true};
+Object.keys(LAYERS).forEach(k=>state.layers[k]=true);
+Object.keys(CONN_TYPES).forEach(k=>state.connTypes[k]=true);
+
+// Build presets from config (null = all)
+const _cfgPresets = CONFIG.presets;
+const PRESETS={};
+Object.keys(_cfgPresets).forEach(function(k){
+  const p=_cfgPresets[k];
+  PRESETS[k]={label:p.label, layers:p.layers||Object.keys(LAYERS), conns:p.conns||Object.keys(CONN_TYPES)};
+});
+
+// ── SVG Build (safe DOM methods) ─────────────────
+function getPath(f,t){
+  const dx=t.x-f.x,dy=t.y-f.y;
+  let x1,y1,x2,y2;
+  if(Math.abs(dy)<20){
+    if(dx>0){x1=f.x+f.w/2;x2=t.x-t.w/2}else{x1=f.x-f.w/2;x2=t.x+t.w/2}
+    y1=f.y;y2=t.y;const a=Math.min(28,Math.abs(x2-x1)*.18);
+    return'M'+x1+','+y1+' C'+(x1+(x2-x1)*.3)+','+(y1-a)+' '+(x2-(x2-x1)*.3)+','+(y2-a)+' '+x2+','+y2;
+  }
+  if(dy>0){x1=f.x;y1=f.y+f.h/2;x2=t.x;y2=t.y-t.h/2}
+  else{x1=f.x;y1=f.y-f.h/2;x2=t.x;y2=t.y+t.h/2}
+  const c=(y2-y1)*.38;
+  return'M'+x1+','+y1+' C'+x1+','+(y1+c)+' '+x2+','+(y2-c)+' '+x2+','+y2;
+}
+
+function buildSVG(){
+  const svg=document.getElementById('diagram');
+  svg.setAttribute('viewBox','0 0 '+VBW+' '+VBH);
+  // Clear
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  // Defs
+  const defs=el('defs');
+  for(const[type,cfg]of Object.entries(CONN_TYPES)){
+    const m=el('marker',{id:'arrow-'+type,markerWidth:'7',markerHeight:'5',refX:'6',refY:'2.5',orient:'auto'});
+    m.appendChild(el('polygon',{points:'0 0,7 2.5,0 5',fill:cfg.color,opacity:'.7'}));
+    defs.appendChild(m);
+  }
+  svg.appendChild(defs);
+  // Layer bands
+  const bandsG=el('g',{'class':'layer-bands'});
+  for(const b of layerBands){
+    const lyr=LAYERS[b.layer];
+    bandsG.appendChild(el('rect',{'class':'layer-band','data-layer':b.layer,x:'0',y:String(b.y),width:String(VBW),height:String(b.h),fill:lyr.color}));
+    const lbl=el('text',{'class':'layer-label',x:'14',y:String(b.y+b.h/2+3.5),fill:lyr.color},lyr.label);
+    bandsG.appendChild(lbl);
+  }
+  svg.appendChild(bandsG);
+  // Connections
+  const connsG=el('g',{'class':'connections'});
+  connections.forEach((c,i)=>{
+    const fn=nodeMap[c.from],tn=nodeMap[c.to];
+    if(!fn||!tn)return;
+    const ct=CONN_TYPES[c.type];
+    const d=getPath(fn,tn);
+    const g=el('g',{'class':'conn-group','data-index':String(i),'data-type':c.type,'data-from':c.from,'data-to':c.to});
+    const pathAttrs={'class':'conn-path',id:'conn-'+i,d:d,stroke:ct.color};
+    if(ct.dash)pathAttrs['stroke-dasharray']=ct.dash;
+    pathAttrs['marker-end']='url(#arrow-'+c.type+')';
+    g.appendChild(el('path',pathAttrs));
+    const mx=(fn.x+tn.x)/2,my=(fn.y+tn.y)/2;
+    g.appendChild(el('text',{'class':'conn-label-text',x:String(mx),y:String(my-5)},c.label||''));
+    // Flow dot
+    const dur=(1.8+Math.random()*1.8).toFixed(1);
+    for(let di=0;di<3;di++){
+      const dot=el('circle',{'class':'flow-dot'+(state.flowAnim?' active':''),r:String(3.5-di*.7),fill:ct.color,style:'offset-path:path("'+d+'");offset-rotate:0deg;animation:flowAnim '+dur+'s linear infinite;animation-delay:'+(di*dur/3).toFixed(2)+'s;opacity:'+(1-di*.3).toFixed(1)});
+      g.appendChild(dot);
+    }
+    connsG.appendChild(g);
+  });
+  svg.appendChild(connsG);
+  // Nodes
+  const nodesG=el('g',{'class':'nodes'});
+  for(const n of nodes){
+    const lyr=LAYERS[n.layer];
+    const rx=n.x-n.w/2,ry=n.y-n.h/2;
+    const g=el('g',{'class':'node-group','data-id':n.id,'data-layer':n.layer,
+      onmouseenter:function(e){onNodeEnter(e,n.id)},
+      onmouseleave:onNodeLeave,
+      onclick:function(){onNodeClick(n.id)}
+    });
+    g.appendChild(el('rect',{'class':'node-rect',x:String(rx),y:String(ry),width:String(n.w),height:String(n.h),fill:lyr.bg,stroke:lyr.color}));
+    g.appendChild(el('text',{'class':'node-title',x:String(n.x),y:String(n.y-4)},n.label));
+    g.appendChild(el('text',{'class':'node-subtitle',x:String(n.x),y:String(n.y+10)},n.subtitle));
+    // Comment badge
+    g.appendChild(el('circle',{'class':'comment-badge',cx:String(rx+n.w-4),cy:String(ry+4),r:'5',fill:'#06b6d4',style:'display:none'}));
+    nodesG.appendChild(g);
+  }
+  svg.appendChild(nodesG);
+}
+
+// ── Interactions ─────────────────────────────────
+const tooltipEl=document.getElementById('tooltip');
+let ttTimer;
+
+function onNodeEnter(e,id){
+  state.hoveredNode=id;
+  const n=nodeMap[id];
+  // Highlight connections
+  document.querySelectorAll('.conn-group').forEach(g=>{
+    const f=g.dataset.from,t=g.dataset.to;
+    if(f===id||t===id){
+      g.querySelector('.conn-path').classList.add('highlighted');
+      g.querySelector('.conn-label-text').classList.add('visible');
+    }else{
+      g.querySelector('.conn-path').classList.add('dimmed');
+    }
+  });
+  document.querySelectorAll('.node-group').forEach(g=>{
+    if(g.dataset.id===id){g.classList.add('highlighted');return}
+    const connected=connections.some(c=>(c.from===id&&c.to===g.dataset.id)||(c.to===id&&c.from===g.dataset.id));
+    if(!connected)g.classList.add('dimmed');
+  });
+  // Tooltip (safe DOM)
+  clearTimeout(ttTimer);
+  tooltipEl.textContent='';
+  const ttTitle=document.createElement('div');ttTitle.className='tooltip-title';ttTitle.textContent=n.label;
+  const ttPath=document.createElement('div');ttPath.className='tooltip-path';ttPath.textContent=n.subtitle;
+  const ttDetail=document.createElement('div');ttDetail.className='tooltip-detail';ttDetail.textContent=n.detail;
+  const ttHint=document.createElement('div');ttHint.className='tooltip-hint';ttHint.textContent='Click to add comment';
+  tooltipEl.append(ttTitle,ttPath,ttDetail,ttHint);
+  tooltipEl.classList.add('show');
+  posTooltip(e);
+}
+
+function onNodeLeave(){
+  state.hoveredNode=null;
+  document.querySelectorAll('.conn-path').forEach(p=>p.classList.remove('highlighted','dimmed'));
+  document.querySelectorAll('.conn-label-text').forEach(l=>l.classList.remove('visible'));
+  document.querySelectorAll('.node-group').forEach(g=>g.classList.remove('dimmed','highlighted'));
+  ttTimer=setTimeout(()=>tooltipEl.classList.remove('show'),80);
+}
+
+function posTooltip(e){
+  let x=e.clientX+12,y=e.clientY+12;
+  if(x+270>window.innerWidth)x=e.clientX-275;
+  if(y+180>window.innerHeight)y=e.clientY-170;
+  tooltipEl.style.left=x+'px';tooltipEl.style.top=y+'px';
+}
+document.addEventListener('mousemove',e=>{if(tooltipEl.classList.contains('show'))posTooltip(e)});
+
+// Zoom
+function applyZoom(){
+  const svg=document.getElementById('diagram');
+  const w=VBW/state.zoom,h=VBH/state.zoom;
+  const ox=(VBW-w)/2+state.panX,oy=(VBH-h)/2+state.panY;
+  svg.setAttribute('viewBox',ox+' '+oy+' '+w+' '+h);
+}
+document.getElementById('zoom-in').addEventListener('click',()=>{state.zoom=Math.min(3,state.zoom*1.25);applyZoom()});
+document.getElementById('zoom-out').addEventListener('click',()=>{state.zoom=Math.max(.5,state.zoom/1.25);applyZoom()});
+document.getElementById('zoom-reset').addEventListener('click',()=>{state.zoom=1;state.panX=0;state.panY=0;applyZoom()});
+
+// Pan
+let isPan=false,panS={x:0,y:0};
+const cw=document.getElementById('canvas-wrap');
+cw.addEventListener('mousedown',e=>{
+  if(e.target.closest('.node-group')||e.target.closest('.zoom-btn')||e.target.closest('.flow-toggle'))return;
+  isPan=true;panS={x:e.clientX,y:e.clientY};cw.style.cursor='grabbing';
+});
+document.addEventListener('mousemove',e=>{
+  if(!isPan)return;
+  const sc=VBW/(cw.clientWidth*state.zoom);
+  state.panX-=(e.clientX-panS.x)*sc;state.panY-=(e.clientY-panS.y)*sc;
+  panS={x:e.clientX,y:e.clientY};applyZoom();
+});
+document.addEventListener('mouseup',()=>{isPan=false;cw.style.cursor=''});
+cw.addEventListener('wheel',e=>{
+  e.preventDefault();
+  if(e.deltaY<0)state.zoom=Math.min(3,state.zoom*1.12);else state.zoom=Math.max(.5,state.zoom/1.12);
+  applyZoom();
+},{passive:false});
+
+// ── Comments ─────────────────────────────────────
+let modalNodeId=null;
+const modalOverlay=document.getElementById('modal-overlay');
+const modalTitle=document.getElementById('modal-title');
+const modalPath=document.getElementById('modal-path');
+const modalText=document.getElementById('modal-text');
+
+function onNodeClick(id){
+  modalNodeId=id;const n=nodeMap[id];
+  modalTitle.textContent=n.label;
+  modalPath.textContent=n.subtitle;
+  const ex=state.comments.find(c=>c.target===id);
+  modalText.value=ex?ex.text:'';
+  modalOverlay.classList.add('open');
+  setTimeout(()=>modalText.focus(),50);
+}
+function closeModal(){modalOverlay.classList.remove('open');modalNodeId=null}
+function saveComment(){
+  const text=modalText.value.trim();
+  if(!text){state.comments=state.comments.filter(c=>c.target!==modalNodeId)}
+  else{
+    const ex=state.comments.find(c=>c.target===modalNodeId);
+    if(ex)ex.text=text;else state.comments.push({target:modalNodeId,text:text});
+  }
+  closeModal();updateCommentBadges();renderComments();updatePrompt();updateStats();
+}
+function deleteComment(target){
+  state.comments=state.comments.filter(c=>c.target!==target);
+  updateCommentBadges();renderComments();updatePrompt();updateStats();
+}
+function updateCommentBadges(){
+  document.querySelectorAll('.node-group').forEach(g=>{
+    const b=g.querySelector('.comment-badge');
+    b.style.display=state.comments.some(c=>c.target===g.dataset.id)?'':'none';
+  });
+}
+function renderComments(){
+  const list=document.getElementById('comments-list');
+  const cnt=document.getElementById('comment-count');
+  cnt.textContent=state.comments.length?'('+state.comments.length+')':'';
+  list.textContent='';
+  if(!state.comments.length){
+    const em=document.createElement('div');em.className='empty-msg';em.textContent='Click a node to add feedback';
+    list.appendChild(em);return;
+  }
+  state.comments.forEach(c=>{
+    const n=nodeMap[c.target];
+    const row=document.createElement('div');row.className='comment-item';
+    const tgt=document.createElement('span');tgt.className='comment-target';tgt.textContent=n.label;
+    const txt=document.createElement('span');txt.className='comment-text';txt.textContent=c.text;
+    const del=document.createElement('button');del.className='comment-del';del.textContent='\u00d7';
+    del.addEventListener('click',()=>deleteComment(c.target));
+    row.append(tgt,txt,del);list.appendChild(row);
+  });
+}
+
+document.getElementById('modal-cancel').addEventListener('click',closeModal);
+document.getElementById('modal-save').addEventListener('click',saveComment);
+modalOverlay.addEventListener('click',e=>{if(e.target===modalOverlay)closeModal()});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeModal();
+  if(e.key==='Enter'&&e.metaKey&&modalNodeId)saveComment();
+});
+
+// ── Controls ─────────────────────────────────────
+function buildControls(){
+  // Presets
+  const pEl=document.getElementById('presets');pEl.textContent='';
+  Object.entries(PRESETS).forEach(([k,p])=>{
+    const btn=document.createElement('button');
+    btn.className='preset-btn'+(k===state.activePreset?' active':'');
+    btn.dataset.preset=k;btn.textContent=p.label;
+    btn.addEventListener('click',()=>applyPreset(k));
+    pEl.appendChild(btn);
+  });
+  // Layer toggles
+  const lEl=document.getElementById('layer-toggles');lEl.textContent='';
+  Object.entries(LAYERS).forEach(([k,l])=>{
+    const lbl=document.createElement('label');lbl.className='toggle';lbl.style.setProperty('--tcolor',l.color);
+    const inp=document.createElement('input');inp.type='checkbox';inp.checked=state.layers[k];
+    inp.addEventListener('change',function(){toggleLayer(k,this.checked)});
+    const box=document.createElement('span');box.className='box';
+    const txt=document.createElement('span');txt.className='lbl';txt.textContent=l.label;
+    lbl.append(inp,box,txt);lEl.appendChild(lbl);
+  });
+  // Conn toggles
+  const cEl=document.getElementById('conn-toggles');cEl.textContent='';
+  Object.entries(CONN_TYPES).forEach(([k,c])=>{
+    const lbl=document.createElement('label');lbl.className='conn-toggle';
+    const inp=document.createElement('input');inp.type='checkbox';inp.checked=state.connTypes[k];
+    inp.addEventListener('change',function(){toggleConnType(k,this.checked)});
+    const line=document.createElement('span');line.className='conn-line';
+    line.style.background=c.dash?'repeating-linear-gradient(90deg,'+c.color+' 0,'+c.color+' 4px,transparent 4px,transparent 7px)':c.color;
+    const txt=document.createElement('span');txt.className='lbl';txt.textContent=c.label;
+    lbl.append(inp,line,txt);cEl.appendChild(lbl);
+  });
+}
+
+function toggleLayer(k,on){state.layers[k]=on;state.activePreset=null;updateVis();updatePrompt();updatePresetBtns()}
+function toggleConnType(k,on){state.connTypes[k]=on;state.activePreset=null;updateVis();updatePrompt();updatePresetBtns()}
+function applyPreset(k){
+  state.activePreset=k;const p=PRESETS[k];
+  Object.keys(LAYERS).forEach(l=>state.layers[l]=p.layers.includes(l));
+  Object.keys(CONN_TYPES).forEach(c=>state.connTypes[c]=p.conns.includes(c));
+  buildControls();updateVis();updatePrompt();
+}
+function updatePresetBtns(){
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b.dataset.preset===state.activePreset));
+}
+
+function updateVis(){
+  document.querySelectorAll('.node-group').forEach(g=>g.style.display=state.layers[g.dataset.layer]?'':'none');
+  document.querySelectorAll('.layer-band').forEach(r=>r.style.display=state.layers[r.dataset.layer]?'':'none');
+  // Layer labels (match by text)
+  const bandMap={};layerBands.forEach(b=>bandMap[LAYERS[b.layer].label]=b.layer);
+  document.querySelectorAll('.layer-label').forEach(t=>{
+    const ly=bandMap[t.textContent];
+    if(ly)t.style.display=state.layers[ly]?'':'none';
+  });
+  document.querySelectorAll('.conn-group').forEach(g=>{
+    const fn=nodeMap[g.dataset.from],tn=nodeMap[g.dataset.to];
+    const vis=state.connTypes[g.dataset.type]&&state.layers[fn.layer]&&state.layers[tn.layer];
+    g.style.display=vis?'':'none';
+  });
+  updateStats();
+}
+
+function updateStats(){
+  const vn=nodes.filter(n=>state.layers[n.layer]).length;
+  const vc=connections.filter(c=>{const f=nodeMap[c.from],t=nodeMap[c.to];return state.connTypes[c.type]&&state.layers[f.layer]&&state.layers[t.layer]}).length;
+  const s=document.getElementById('stats');s.textContent='';
+  const s1=document.createElement('span');s1.textContent=vn+'/'+nodes.length+' nodes';
+  const s2=document.createElement('span');s2.textContent=vc+'/'+connections.length+' connections';
+  const s3=document.createElement('span');s3.textContent=state.comments.length+' comments';
+  s.append(s1,s2,s3);
+}
+
+// Flow toggle
+document.getElementById('flow-toggle').addEventListener('click',function(){
+  state.flowAnim=!state.flowAnim;this.classList.toggle('active',state.flowAnim);
+  document.querySelectorAll('.flow-dot').forEach(d=>d.classList.toggle('active',state.flowAnim));
+});
+
+// ── Prompt ───────────────────────────────────────
+function updatePrompt(){
+  const parts=[];
+  parts.push("I'm reviewing the SolProbe architecture \u2014 an autonomous fault detection and recovery system for distributed AI training on Solana.\n");
+  const visLayers=Object.entries(state.layers).filter(([,v])=>v).map(([k])=>LAYERS[k].label);
+  if(visLayers.length<Object.keys(LAYERS).length){
+    parts.push('Focusing on: '+visLayers.join(', ')+'.\n');
+  }
+  parts.push('System: Rust sidecar (edge detection) + FastAPI backend (central processing) + LLM diagnosis (Claude API + RAG) + Next.js dashboard (real-time) + 4 Solana Anchor programs (trust layer).');
+  parts.push('Flow: PyTorch \u2192 mmap \u2192 Rust sidecar (1s) \u2192 gRPC :50051 \u2192 FastAPI \u2192 detectors \u2192 Claude diagnosis \u2192 WebSocket \u2192 Dashboard.');
+  parts.push('Ports: 3000 (dashboard), 8000 (REST+WS), 9100 (Prometheus), 50051 (gRPC).');
+  if(state.comments.length>0){
+    parts.push('\nComponent feedback:');
+    state.comments.forEach(c=>{
+      const n=nodeMap[c.target];
+      parts.push('\n**'+n.label+'** ('+n.subtitle+'):');
+      parts.push(c.text);
+    });
+  }
+  document.getElementById('prompt-output').textContent=parts.join('\n');
+}
+
+// Sidebar collapse
+document.getElementById('sidebar-toggle').addEventListener('click',function(){
+  const sb=document.getElementById('sidebar');
+  const btn=document.getElementById('sidebar-toggle');
+  const collapsed=sb.classList.toggle('collapsed');
+  btn.textContent=collapsed?'\u25B6':'\u25C0';
+  document.querySelector('.app').style.setProperty('--sidebar-w',collapsed?'36px':'300px');
+});
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
+    document.querySelectorAll('.tab-pane').forEach(function(p){p.classList.remove('active')});
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
+// Prompt panel collapse
+document.getElementById('prompt-header').addEventListener('click',function(){
+  const body=document.getElementById('prompt-body');
+  const btn=document.getElementById('prompt-toggle');
+  const panel=document.getElementById('prompt-panel');
+  const collapsed=body.classList.toggle('collapsed');
+  btn.classList.toggle('collapsed',collapsed);
+  const app=document.querySelector('.app');
+  app.style.gridTemplateRows=collapsed?'52px 1fr 28px':'52px 1fr 140px';
+});
+// Copy
+document.getElementById('copy-btn').addEventListener('click',function(){
+  const text=document.getElementById('prompt-output').textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById('copy-btn');
+    btn.textContent='Copied!';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied')},1200);
+  });
+});
+
+// ── Init ─────────────────────────────────────────
+// ── Populate from CONFIG ────────────────────────
+document.getElementById('brand-name').textContent=CONFIG.title;
+document.getElementById('brand-tag').textContent=CONFIG.tagline;
+document.querySelector('.badge').textContent=CONFIG.version;
+var hsEl=document.getElementById('header-stats');
+CONFIG.stats.forEach(function(s){
+  var d=document.createElement('div');d.className='stat';
+  var v=document.createElement('span');v.className='stat-val';v.textContent=s.value;v.style.color=s.color||'var(--text)';
+  var l=document.createElement('span');l.className='stat-label';l.textContent=s.label;
+  d.appendChild(v);d.appendChild(l);hsEl.appendChild(d);
+});
+var aboutEl=document.getElementById('tab-about');
+CONFIG.about.forEach(function(sec,i){
+  if(i>0){var sep=document.createElement('div');sep.className='separator';aboutEl.appendChild(sep);}
+  if(sec.title){
+    var wrap=document.createElement('div');wrap.className='about-section';
+    var h=document.createElement('h3');h.textContent=sec.title;wrap.appendChild(h);
+    if(sec.grid){
+      var g=document.createElement('div');g.className='tech-grid';
+      sec.grid.forEach(function(item){
+        var t=document.createElement('div');t.className='tech-item';
+        var n=document.createElement('div');n.className='tech-name';n.textContent=item.name;
+        var vr=document.createElement('div');vr.className='tech-ver';vr.textContent=item.ver;
+        t.appendChild(n);t.appendChild(vr);g.appendChild(t);
+      });
+      wrap.appendChild(g);
+    }
+    if(sec.text){var tx=document.createElement('div');tx.className='about-text';tx.innerHTML=sec.text;wrap.appendChild(tx);}
+    aboutEl.appendChild(wrap);
+  } else {
+    var tx=document.createElement('div');tx.className='about-text';tx.innerHTML=sec.text;aboutEl.appendChild(tx);
+  }
+});
+
+buildSVG();buildControls();updateVis();updateCommentBadges();renderComments();updatePrompt();
+</script>
+</body>
+</html>
