@@ -73,21 +73,21 @@ export function GpuCharts({ metrics }: GpuChartsProps) {
 // Inline sub-components
 
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { LineChart, Line, ReferenceLine } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line } from "recharts";
 import type { GpuMetrics } from "@/lib/types";
 
 function MemoryBar({ data }: { data: GpuMetrics[] }) {
-  const latest = data[data.length - 1];
-  if (!latest) return <p className="text-muted-foreground">No data</p>;
-  const total = latest.fb_used_mb + latest.fb_free_mb;
-  const pct = total > 0 ? (latest.fb_used_mb / total) * 100 : 0;
-
   const chartData = useMemo(() => data.slice(-20).map(d => ({
     time: new Date(d.timestamp_ms).toLocaleTimeString(),
     used: d.fb_used_mb,
     free: d.fb_free_mb,
   })), [data]);
+
+  const latest = data[data.length - 1];
+  if (!latest) return <p className="text-muted-foreground">No data</p>;
+  const total = latest.fb_used_mb + latest.fb_free_mb;
+  const pct = total > 0 ? (latest.fb_used_mb / total) * 100 : 0;
 
   return (
     <div className="space-y-4">

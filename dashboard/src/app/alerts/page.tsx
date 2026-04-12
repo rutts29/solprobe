@@ -31,9 +31,8 @@ export default function AlertsPage() {
 
   useRealtime(ws.subscribe, { onAlert });
 
-  useEffect(() => {
-    setSelectedAlert(null);
-  }, [severity]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset selection on filter change
+  useEffect(() => { setSelectedAlert(null) }, [severity]);
 
   return (
     <div className="space-y-6">
