@@ -24,7 +24,7 @@ from app.models.alerts import AlertModel
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL = "claude-sonnet-4-20250514"
+_DEFAULT_MODEL = "claude-haiku-4-5"
 
 
 class DiagnosisAgent:

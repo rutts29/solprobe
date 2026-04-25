@@ -374,7 +374,7 @@ const DEFAULT_CONFIG = {
     {id:'escrow',label:'Escrow',subtitle:'solana/programs/escrow/',x:460,y:686,layer:'solana',detail:'SOL vault per job (max 10 workers). create_job -> release_payment / slash_payment -> close_job. Slash transfers from vault back to creator with evidence_hash.'},
     {id:'reputation',label:'Reputation',subtitle:'solana/programs/reputation/',x:720,y:686,layer:'solana',detail:'Worker profile PDA. Score = (completed * 10000) / total_jobs. Starts at 100% (10000). record_completion() / record_failure(slash_amount).'},
     {id:'staking',label:'Staking',subtitle:'solana/programs/staking/',x:980,y:686,layer:'solana',detail:'SOL stake with cooldown. slash(amount, reason_hash, diagnosis_id) links on-chain slash to off-chain SolProbe diagnosis. Deactivates on full slash.'},
-    {id:'claude-api',label:'Claude API',subtitle:'claude-sonnet-4-20250514',x:1280,y:430,w:130,layer:'external',detail:'Claude Sonnet 4. 1024 max tokens per diagnosis. Forced tool_use (submit_diagnosis). Handles RateLimitError, APITimeoutError gracefully.'},
+    {id:'claude-api',label:'Claude API',subtitle:'claude-haiku-4-5',x:1280,y:430,w:130,layer:'external',detail:'Claude Haiku 4.5 — fast, cheap diagnosis model. 1024 max tokens per diagnosis. Forced tool_use (submit_diagnosis). Handles RateLimitError, APITimeoutError gracefully.'},
     {id:'prometheus',label:'Prometheus',subtitle:'prometheus:9090',x:1280,y:236,w:130,layer:'external',detail:'Scrapes sidecar :9100 + backend :8000 every 5s. Alertmanager routes CRITICAL/WARNING via webhook. Grafana dashboards for GPU + training health.'}
   ],
 
