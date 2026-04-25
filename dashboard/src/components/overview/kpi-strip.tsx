@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sparkline, SparkBars } from "@/components/ui/sparkline";
 import { cn } from "@/lib/utils";
 import {
-  Server, AlertTriangle, Brain, Cpu, Zap, Coins,
+  Server, AlertTriangle, Brain, Cpu, Zap,
   TrendingUp, TrendingDown, Minus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -27,6 +27,19 @@ interface KpiStripProps {
 }
 
 type Trend = "up" | "down" | "flat";
+
+// Pure: counts alerts within 60s of the most recent one. Using Date.now()
+// during render violates react-hooks/purity; deriving "now" from data is
+// stable and passes under Next 16 lint.
+function alertsInLastMinute(alerts: AlertModel[]): number {
+  if (alerts.length === 0) return 0;
+  let latest = 0;
+  for (const a of alerts) if (a.timestamp_ms > latest) latest = a.timestamp_ms;
+  const cutoff = latest - 60_000;
+  let n = 0;
+  for (const a of alerts) if (a.timestamp_ms > cutoff) n++;
+  return n;
+}
 
 interface KpiCardProps {
   label: string;
@@ -122,7 +135,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
       />
       <KpiCard
         label="Alerts / min"
-        value={String(alerts.filter((a) => a.timestamp_ms > Date.now() - 60_000).length)}
+        value={String(alertsInLastMinute(alerts))}
         delta={`${alertsTotal} total`}
         trend={apm[apm.length - 1] > apm[0] ? "up" : "flat"}
         icon={AlertTriangle}

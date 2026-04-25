@@ -1,8 +1,12 @@
+// REPLACE: dashboard/src/app/alerts/page.tsx — adds <SeveritySummary>.
+// Filters, AlertTimeline, AlertDetail unchanged.
+
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
 import { AlertTimeline } from "@/components/alerts/alert-timeline";
 import { AlertDetail } from "@/components/alerts/alert-detail";
+import { SeveritySummary } from "@/components/alerts/severity-summary";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAlerts } from "@/hooks/use-alerts";
 import { useWebSocket } from "@/lib/websocket";
@@ -16,19 +20,16 @@ export default function AlertsPage() {
   const [selectedAlert, setSelectedAlert] = useState<AlertModel | null>(null);
   const { alerts, loading, error, refresh, prepend } = useAlerts({
     severity: severity === "ALL" ? undefined : severity,
-    limit: 50,
+    limit: 100,
   });
   const ws = useWebSocket();
 
   const onAlert = useCallback(
     (msg: { type: "alert"; data: AlertModel }) => {
-      if (severity === "ALL" || msg.data.severity === severity) {
-        prepend(msg.data);
-      }
+      if (severity === "ALL" || msg.data.severity === severity) prepend(msg.data);
     },
     [prepend, severity]
   );
-
   useRealtime(ws.subscribe, { onAlert });
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- reset selection on filter change
@@ -37,7 +38,7 @@ export default function AlertsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Alerts</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Alerts</h1>
       </div>
 
       {error && (
@@ -47,7 +48,8 @@ export default function AlertsPage() {
         </div>
       )}
 
-      {/* Filters */}
+      <SeveritySummary alerts={alerts} />
+
       <div className="flex gap-2">
         {SEVERITIES.map((s) => (
           <button
