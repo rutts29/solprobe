@@ -32,3 +32,4 @@ backend/app/generated/*.py
 # Superpowers
 .superpowers/
 backend/.venv/
+.worktrees/
