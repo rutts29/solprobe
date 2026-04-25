@@ -106,16 +106,30 @@ class DiagnosisAgent:
             self._store.add(result)
             return result
 
-        # Phase 2: LLM call with specific error handling
+        # Phase 2: LLM call with prompt caching enabled
+        # Cache breakpoint on the tool definition caches [system + tool] as a
+        # prefix. Subsequent diagnoses in the 5-min window pay ~10% of base
+        # input price on this prefix. Requires prefix >= 4096 tokens on Haiku 4.5.
+        cached_tool = {**DIAGNOSIS_TOOL, "cache_control": {"type": "ephemeral"}}
         try:
             response = self._client.messages.create(
                 model=self._model,
                 max_tokens=1024,
-                system=build_system_prompt(),
-                tools=[DIAGNOSIS_TOOL],
+                system=[{"type": "text", "text": build_system_prompt()}],
+                tools=[cached_tool],
                 tool_choice={"type": "tool", "name": "submit_diagnosis"},
                 messages=[{"role": "user", "content": user_message}],
             )
+            # Log cache usage for observability
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+                cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+                logger.info(
+                    "Diagnosis cache: read=%d write=%d fresh_input=%d output=%d alert=%s",
+                    cache_read, cache_write, usage.input_tokens, usage.output_tokens,
+                    alert.alert_id,
+                )
         except RateLimitError:
             logger.warning("Anthropic rate limit hit for alert %s", alert.alert_id)
             result = self._make_failed_result(
