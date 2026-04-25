@@ -111,11 +111,18 @@ class DiagnosisAgent:
         # prefix. Subsequent diagnoses in the 5-min window pay ~10% of base
         # input price on this prefix. Requires prefix >= 4096 tokens on Haiku 4.5.
         cached_tool = {**DIAGNOSIS_TOOL, "cache_control": {"type": "ephemeral"}}
+        cached_system = [
+            {
+                "type": "text",
+                "text": build_system_prompt(),
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
         try:
             response = self._client.messages.create(
                 model=self._model,
                 max_tokens=1024,
-                system=[{"type": "text", "text": build_system_prompt()}],
+                system=cached_system,
                 tools=[cached_tool],
                 tool_choice={"type": "tool", "name": "submit_diagnosis"},
                 messages=[{"role": "user", "content": user_message}],
