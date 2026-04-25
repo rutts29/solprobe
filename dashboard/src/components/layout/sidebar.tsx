@@ -59,15 +59,23 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
       )}
     >
       {/* Logo */}
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        {collapsed ? (
-          <img src="/solprobe-mark.svg" alt="" className="h-6 w-6 shrink-0" />
-        ) : (
-          <img src="/solprobe-wordmark.svg" alt="SolProbe" className="h-6 dark:hidden" />
-        )}
-        {!collapsed && (
-          <img src="/solprobe-wordmark-dark.svg" alt="SolProbe" className="hidden h-6 dark:block" />
-        )}
+      <div className="flex h-14 items-center border-b px-3">
+        <Link
+          href="/"
+          aria-label="Open SolProbe landing page"
+          className={cn(
+            "flex min-w-0 items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-ring",
+            collapsed ? "justify-center" : "px-1"
+          )}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/solprobe-mark.svg" alt="" className="h-8 w-8 shrink-0" />
+          {!collapsed && (
+            <span className="whitespace-nowrap text-base font-bold tracking-tight">
+              <span className="text-foreground">Sol</span><span className="font-medium text-muted-foreground">Probe</span>
+            </span>
+          )}
+        </Link>
       </div>
 
       {/* Cluster picker */}
