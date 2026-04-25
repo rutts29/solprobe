@@ -62,7 +62,13 @@ def main():
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
     parser.add_argument("--node-id", type=str, default="node-0", help="SolProbe node ID")
     parser.add_argument("--inject-spike-at", type=int, default=None,
-                        help="Inject a loss spike at this step (for demo)")
+                        help="Inject a loss spike starting at this step (for demo)")
+    parser.add_argument("--spike-duration", type=int, default=1,
+                        help="Number of steps the injected spike persists")
+    parser.add_argument("--spike-magnitude", type=float, default=100.0,
+                        help="Gradient multiplier during spike (100=WARN, 1000=CRITICAL)")
+    parser.add_argument("--slow-step-ms", type=int, default=0,
+                        help="Sleep N ms between steps so 1Hz sidecar polling can observe each step")
     args = parser.parse_args()
 
     # Select device
@@ -105,10 +111,12 @@ def main():
         targets = x[:, 1:]  # shift by 1 for next-token prediction
         inputs = x[:, :-1]
 
-        # Optional: inject loss spike by corrupting gradients
-        if args.inject_spike_at and step == args.inject_spike_at:
-            print(f"\n[!] Injecting loss spike at step {step}...")
-            # Feed garbage that produces extreme loss
+        # Optional: inject sustained loss spike by corrupting gradients
+        spike_start = args.inject_spike_at
+        spike_active = spike_start is not None and spike_start <= step < spike_start + args.spike_duration
+        if spike_active and step == spike_start:
+            print(f"\n[!] Injecting loss spike at step {step} for {args.spike_duration} steps...")
+        if spike_active:
             inputs = torch.zeros_like(inputs)
             targets = torch.randint(0, vocab_size, targets.shape, device=device)
 
@@ -119,14 +127,17 @@ def main():
         optimizer.zero_grad()
         loss.backward()
 
-        # Optional: inject gradient explosion
-        if args.inject_spike_at and step == args.inject_spike_at:
+        # Optional: inject gradient explosion (sustained across spike-duration)
+        if spike_active:
             for p in model.parameters():
                 if p.grad is not None:
-                    p.grad *= 100.0  # artificially inflate gradients
+                    p.grad *= args.spike_magnitude
 
         optimizer.step()
         scheduler.step()
+
+        if args.slow_step_ms > 0:
+            time.sleep(args.slow_step_ms / 1000.0)
 
         batch_time = time.perf_counter() - t0
 
