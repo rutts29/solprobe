@@ -49,16 +49,22 @@ class DiagnosisResult(BaseModel):
     similar_incidents: list[SimilarIncident] = Field(default_factory=list)
     llm_model: str
     latency_ms: int
-    status: Literal["completed", "failed", "rate_limited"]
+    status: Literal["completed", "failed", "rate_limited", "cached"]
     error: str | None = None
+    cached_from: str | None = Field(
+        default=None,
+        description="If status='cached', the diagnosis_id this result was cloned from.",
+    )
 
     @model_validator(mode="after")
     def _check_status_error_consistency(self) -> DiagnosisResult:
-        """Ensure failed/rate_limited results have an error, completed ones don't."""
+        """Ensure failed/rate_limited results have an error, completed/cached ones don't."""
         if self.status in ("failed", "rate_limited") and not self.error:
             raise ValueError(f"status='{self.status}' requires a non-empty error field")
-        if self.status == "completed" and self.error is not None:
-            raise ValueError("status='completed' must not have an error field")
+        if self.status in ("completed", "cached") and self.error is not None:
+            raise ValueError(f"status='{self.status}' must not have an error field")
+        if self.status == "cached" and not self.cached_from:
+            raise ValueError("status='cached' requires cached_from to be set")
         return self
 
 
