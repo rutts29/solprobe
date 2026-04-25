@@ -11,6 +11,7 @@ import uuid
 import anthropic
 from anthropic import APIError, APITimeoutError, RateLimitError
 
+from app.diagnosis.fingerprint import alert_fingerprint
 from app.diagnosis.models import (
     DiagnosisResult,
     EvidenceItem,
@@ -25,6 +26,10 @@ from app.models.alerts import AlertModel
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL = "claude-haiku-4-5"
+
+# Result-cache parameters
+_RESULT_CACHE_TTL_MS = 300_000  # 5 minutes
+_RESULT_CACHE_MIN_CONFIDENCE = 0.7
 
 
 class DiagnosisAgent:
@@ -64,6 +69,41 @@ class DiagnosisAgent:
         """
         diagnosis_id = str(uuid.uuid4())
         start_ms = int(time.time() * 1000)
+
+        # Phase 0: Result-cache lookup. If a recent high-confidence diagnosis
+        # was made for a semantically-equivalent alert, clone it instead of
+        # calling the LLM. Fingerprint includes magnitude buckets + XID codes
+        # so different-magnitude spikes never collide.
+        fingerprint = alert_fingerprint(alert)
+        cached = self._store.find_cached_match(
+            fingerprint=fingerprint,
+            max_age_ms=_RESULT_CACHE_TTL_MS,
+            min_confidence=_RESULT_CACHE_MIN_CONFIDENCE,
+        )
+        if cached is not None:
+            logger.info(
+                "Result cache HIT: alert=%s cloned_from=%s fingerprint=%s",
+                alert.alert_id, cached.diagnosis_id, fingerprint,
+            )
+            cloned = DiagnosisResult(
+                diagnosis_id=diagnosis_id,
+                alert_id=alert.alert_id,
+                alert_type=cached.alert_type,
+                node_id=alert.node_id,
+                timestamp_ms=int(time.time() * 1000),
+                root_cause=cached.root_cause,
+                confidence=cached.confidence,
+                reasoning=cached.reasoning,
+                evidence_chain=cached.evidence_chain,
+                recommended_action=cached.recommended_action,
+                similar_incidents=cached.similar_incidents,
+                llm_model=cached.llm_model,
+                latency_ms=int(time.time() * 1000) - start_ms,
+                status="cached",
+                cached_from=cached.diagnosis_id,
+            )
+            self._store.add(cloned)
+            return cloned
 
         # Check rate limit
         if not bypass_rate_limit and not self._rate_limiter.try_acquire(alert.node_id):
@@ -191,6 +231,11 @@ class DiagnosisAgent:
         )
 
         self._store.add(result)
+        # Index completed diagnoses by fingerprint so future equivalent alerts
+        # can reuse them. Only index completed results — failed/rate_limited
+        # shouldn't be reused, and 'cached' results never reach this line.
+        if result.status == "completed":
+            self._store.index_fingerprint(result.diagnosis_id, fingerprint)
         return result
 
     def _parse_response(

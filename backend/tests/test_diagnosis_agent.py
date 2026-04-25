@@ -137,8 +137,10 @@ class TestDiagnosisAgent:
         result1 = agent.diagnose(alert)
         assert result1.status == "completed"
 
-        # Second call for same node should be rate-limited
-        alert2 = _make_alert(node_id="node-1")
+        # Second call for same node but DIFFERENT alert type should be rate-limited.
+        # (Different alert_type → different fingerprint → bypasses result cache,
+        # so the rate-limiter path is exercised.)
+        alert2 = _make_alert(node_id="node-1", alert_type="memory_pressure")
         result2 = agent.diagnose(alert2)
         assert result2.status == "rate_limited"
         assert result2.error is not None
@@ -165,7 +167,9 @@ class TestDiagnosisAgent:
         result1 = agent.diagnose(alert)
         assert result1.status == "completed"
 
-        alert2 = _make_alert(node_id="node-1")
+        # Different alert_type → different fingerprint → result cache misses,
+        # so bypass_rate_limit path reaches the LLM and returns completed.
+        alert2 = _make_alert(node_id="node-1", alert_type="memory_pressure")
         result2 = agent.diagnose(alert2, bypass_rate_limit=True)
         assert result2.status == "completed"
 
@@ -317,3 +321,70 @@ class TestDiagnosisAgent:
 
         assert result.status == "failed"
         assert "rate limit" in result.error.lower()
+
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
+    def test_result_cache_hit(self, mock_anthropic_mod, mock_enrich):
+        """Second alert with matching fingerprint returns cached result, skips LLM."""
+        from app.models.alerts import EnrichedAlert
+
+        alert = _make_alert()
+        enriched = EnrichedAlert(alert=alert, recent_metrics=[], node_history=[], correlated_events=[])
+        mock_enrich.return_value = enriched
+
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_tool_use_response()
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+
+        store = DiagnosisStore()
+        agent = DiagnosisAgent(
+            api_key="test-key",
+            store=store,
+            rate_limiter=DiagnosisRateLimiter(cooldown_seconds=0.0),
+        )
+
+        # First call: real LLM call, stores completed diagnosis with fingerprint.
+        result1 = agent.diagnose(alert)
+        assert result1.status == "completed"
+        assert mock_client.messages.create.call_count == 1
+
+        # Second call with IDENTICAL alert fields → same fingerprint → cache hit.
+        # LLM must NOT be called again.
+        alert2 = _make_alert()  # same node, type, severity, description, evidence
+        result2 = agent.diagnose(alert2)
+        assert result2.status == "cached"
+        assert result2.cached_from == result1.diagnosis_id
+        assert result2.root_cause == result1.root_cause
+        assert mock_client.messages.create.call_count == 1  # still 1, no new LLM call
+
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
+    def test_result_cache_miss_different_magnitude(self, mock_anthropic_mod, mock_enrich):
+        """Different evidence magnitudes → different fingerprints → no cache hit."""
+        from app.models.alerts import EnrichedAlert
+
+        alert = _make_alert()
+        alert.evidence = {"gpu_temp_c": "85.1"}  # magnitude bucket 1
+        enriched = EnrichedAlert(alert=alert, recent_metrics=[], node_history=[], correlated_events=[])
+        mock_enrich.return_value = enriched
+
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _mock_tool_use_response()
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+
+        store = DiagnosisStore()
+        agent = DiagnosisAgent(
+            api_key="test-key",
+            store=store,
+            rate_limiter=DiagnosisRateLimiter(cooldown_seconds=0.0),
+        )
+
+        result1 = agent.diagnose(alert)
+        assert result1.status == "completed"
+
+        # Different magnitude → different fingerprint → cache miss → LLM called again.
+        alert2 = _make_alert()
+        alert2.evidence = {"gpu_temp_c": "127.4"}  # magnitude bucket 2
+        result2 = agent.diagnose(alert2)
+        assert result2.status == "completed"  # not cached
+        assert mock_client.messages.create.call_count == 2  # LLM called twice
