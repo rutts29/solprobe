@@ -76,6 +76,7 @@ import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { LineChart, Line } from "recharts";
 import type { GpuMetrics } from "@/lib/types";
+import { isGpuPowerAvailable } from "@/lib/derive";
 
 function MemoryBar({ data }: { data: GpuMetrics[] }) {
   const chartData = useMemo(() => data.slice(-20).map(d => ({
@@ -121,7 +122,7 @@ function MemoryBar({ data }: { data: GpuMetrics[] }) {
 function PowerChart({ data }: { data: GpuMetrics[] }) {
   const chartData = useMemo(() => data.map(d => ({
     time: new Date(d.timestamp_ms).toLocaleTimeString(),
-    power: d.power_usage_w,
+    power: isGpuPowerAvailable(d) ? d.power_usage_w : null,
   })), [data]);
 
   return (

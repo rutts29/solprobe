@@ -15,7 +15,9 @@ spike, demonstrating SolProbe's z-score anomaly detection on real training.
 from __future__ import annotations
 
 import argparse
+import os
 import time
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -69,6 +71,8 @@ def main():
                         help="Gradient multiplier during spike (100=WARN, 1000=CRITICAL)")
     parser.add_argument("--slow-step-ms", type=int, default=0,
                         help="Sleep N ms between steps so 1Hz sidecar polling can observe each step")
+    parser.add_argument("--mmap-dir", type=Path, default=None,
+                        help="Directory for SolProbe mmap files (default: SOLPROBE_MMAP_DIR or /tmp)")
     args = parser.parse_args()
 
     # Select device
@@ -94,8 +98,9 @@ def main():
 
     # SolProbe callback — writes training metrics to mmap for the sidecar
     peak_tps = 50_000.0 if device.type == "mps" else 15_000.0
-    cb = SolProbeCallback(node_id=args.node_id, peak_tps=peak_tps)
-    print(f"SolProbe callback active: writing to /tmp/solprobe_training_{args.node_id}.bin")
+    mmap_dir = args.mmap_dir or Path(os.environ.get("SOLPROBE_MMAP_DIR", "/tmp"))
+    cb = SolProbeCallback(node_id=args.node_id, peak_tps=peak_tps, mmap_dir=mmap_dir)
+    print(f"SolProbe callback active: writing to {mmap_dir / f'solprobe_training_{args.node_id}.bin'}")
     print(f"Training for {args.steps} steps (batch_size={args.batch_size}, seq_len={args.seq_len})")
     if args.inject_spike_at:
         print(f"Will inject loss spike at step {args.inject_spike_at}")

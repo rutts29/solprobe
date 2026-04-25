@@ -1,7 +1,9 @@
 """DiLoCo training callback that writes distributed training metrics to a
 memory-mapped file consumed by the Rust sidecar.
 
-Binary layout at /tmp/solprobe_diloco_{node_id}.bin (little-endian, 64 bytes):
+Binary layout at {mmap_dir}/solprobe_diloco_{node_id}.bin (little-endian,
+64 bytes). The directory defaults to /tmp and can be overridden with the
+SOLPROBE_MMAP_DIR environment variable.
   Offset  Size  Type  Field
   0       1     u8    valid_flag (1 = data available)
   1       8     i64   timestamp_ms (unix millis)
@@ -69,11 +71,16 @@ class SolProbeDiLoCoCallback:
     ----------
     node_id : str
         Unique identifier for this training node (default ``"node-0"``).
+    mmap_dir : str | pathlib.Path | None
+        Directory for the backing mmap file. Defaults to
+        ``SOLPROBE_MMAP_DIR`` or ``/tmp``.
     """
 
-    def __init__(self, node_id: str = "node-0") -> None:
+    def __init__(self, node_id: str = "node-0", mmap_dir: str | Path | None = None) -> None:
         self.node_id = node_id
-        self._path = Path(f"/tmp/solprobe_diloco_{node_id}.bin")
+        self._mmap_dir = Path(mmap_dir or os.environ.get("SOLPROBE_MMAP_DIR", "/tmp"))
+        self._mmap_dir.mkdir(parents=True, exist_ok=True)
+        self._path = self._mmap_dir / f"solprobe_diloco_{node_id}.bin"
         self._closed = False
 
         # Internal state so partial updates (on_inner_step) can fill the

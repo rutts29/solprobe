@@ -36,11 +36,12 @@ export default function OverviewPage() {
   // Append a sample whenever nodes update (i.e. every poll cycle from useNodes).
   useEffect(() => {
     if (nodes.length === 0) return;
+    const powerKw = totalPowerKw(nodes);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- rolling sparkline accumulator from poll events
     setHistory((h) => ({
       util: [...h.util, avgGpuUtilization(nodes)].slice(-20),
       throughput: [...h.throughput, totalThroughputTps(nodes)].slice(-20),
-      power: [...h.power, totalPowerKw(nodes)].slice(-20),
+      power: powerKw === null ? h.power : [...h.power, powerKw].slice(-20),
     }));
   }, [nodes]);
 

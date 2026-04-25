@@ -6,6 +6,7 @@ mod proto;
 mod simulator;
 mod transport;
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use clap::Parser;
@@ -54,6 +55,10 @@ pub struct Args {
     /// Path to optional TOML config file
     #[arg(long, default_value = "solprobe.toml")]
     config: String,
+
+    /// Directory containing training mmap files
+    #[arg(long, env = "SOLPROBE_MMAP_DIR", default_value = "/tmp")]
+    mmap_dir: PathBuf,
 }
 
 /// Wrapper that adapts the Simulator into the MetricCollector trait.
@@ -66,11 +71,15 @@ struct SimulatorCollector {
 }
 
 impl SimulatorCollector {
-    fn new(node_id: String, inject_fault: Option<String>) -> Self {
+    fn new(node_id: String, inject_fault: Option<String>, mmap_dir: impl Into<PathBuf>) -> Self {
+        let mmap_dir = mmap_dir.into();
         Self {
             sim: Mutex::new(Simulator::new(node_id.clone(), inject_fault)),
-            training_reader: TrainingMetricsReader::new(node_id.clone()),
-            diloco_reader: DiLoCoMetricsReader::new(node_id),
+            training_reader: TrainingMetricsReader::with_mmap_dir(
+                node_id.clone(),
+                mmap_dir.clone(),
+            ),
+            diloco_reader: DiLoCoMetricsReader::with_mmap_dir(node_id, mmap_dir),
         }
     }
 }
@@ -81,10 +90,7 @@ impl MetricCollector for SimulatorCollector {
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<
-                        proto::solprobe::v1::MetricsBatch,
-                        collectors::CollectorError,
-                    >,
+                    Output = Result<proto::solprobe::v1::MetricsBatch, collectors::CollectorError>,
                 > + Send
                 + '_,
         >,
@@ -124,6 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         simulate = args.simulate,
         backend = %args.backend_addr,
         metrics_port = args.metrics_port,
+        mmap_dir = %args.mmap_dir.display(),
         "SolProbe sidecar starting"
     );
 
@@ -137,10 +144,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(SimulatorCollector::new(
             args.node_id.clone(),
             args.inject_fault.clone(),
+            args.mmap_dir.clone(),
         ))
     } else if args.apple_gpu {
         tracing::info!("Running in APPLE SILICON mode (ioreg GPU metrics)");
-        Box::new(AppleSiliconCollector::new(args.node_id.clone()))
+        Box::new(AppleSiliconCollector::with_mmap_dir(
+            args.node_id.clone(),
+            args.mmap_dir.clone(),
+        ))
     } else {
         tracing::info!("Running in DCGM mode (requires GPU)");
         Box::new(DcgmCollector::new())
@@ -152,10 +163,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // --- 3. Create the Prometheus exporter ---
     let prom_exporter = PrometheusExporter::new()
         .map_err(|e| format!("Failed to create Prometheus exporter: {e}"))?;
-    let prom_handle = prom_exporter
-        .serve(args.metrics_port)
-        .await
-        .map_err(|e| -> Box<dyn std::error::Error> { Box::new(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) })?;
+    let prom_handle = prom_exporter.serve(args.metrics_port).await.map_err(
+        |e| -> Box<dyn std::error::Error> {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        },
+    )?;
     tracing::info!(port = args.metrics_port, "Prometheus exporter started");
 
     // --- 4. Create the gRPC transport ---
@@ -176,9 +191,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ctrl_c = signal::ctrl_c();
         #[cfg(unix)]
         {
-            let mut sigterm =
-                signal::unix::signal(signal::unix::SignalKind::terminate())
-                    .expect("Failed to register SIGTERM handler");
+            let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("Failed to register SIGTERM handler");
             tokio::select! {
                 _ = ctrl_c => {
                     tracing::info!("Received SIGINT, shutting down");

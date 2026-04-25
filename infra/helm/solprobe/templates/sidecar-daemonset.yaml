@@ -43,6 +43,8 @@ spec:
             - "$(NODE_NAME)"
             - "--backend-addr"
             - "http://solprobe-backend:{{ .Values.backend.grpcPort }}"
+            - "--mmap-dir"
+            - "{{ .Values.sidecar.mmap.dir }}"
             {{- if .Values.sidecar.simulate }}
             - "--simulate"
             {{- end }}
@@ -51,6 +53,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: SOLPROBE_MMAP_DIR
+              value: "{{ .Values.sidecar.mmap.dir }}"
           ports:
             - name: metrics
               containerPort: {{ .Values.sidecar.metricsPort }}
@@ -70,7 +74,9 @@ spec:
             periodSeconds: 5
           volumeMounts:
             - name: mmap-volume
-              mountPath: /tmp
+              mountPath: {{ .Values.sidecar.mmap.dir }}
       volumes:
         - name: mmap-volume
-          emptyDir: {}
+          hostPath:
+            path: {{ .Values.sidecar.mmap.hostPath }}
+            type: {{ .Values.sidecar.mmap.hostPathType }}

@@ -30,12 +30,12 @@ from pathlib import Path
 # Binary formats (must match Rust sidecar exactly)
 # -----------------------------------------------------------------------
 
-# Training metrics: /tmp/solprobe_training_{node_id}.bin
+# Training metrics: {mmap_dir}/solprobe_training_{node_id}.bin
 _TRAIN_FMT = "<BqQfffff"
 _TRAIN_SIZE = struct.calcsize(_TRAIN_FMT)  # 37
 _TRAIN_FILE_SIZE = 64
 
-# DiLoCo metrics: /tmp/solprobe_diloco_{node_id}.bin
+# DiLoCo metrics: {mmap_dir}/solprobe_diloco_{node_id}.bin
 _DILOCO_FMT = "<BqQQfffffB"
 _DILOCO_SIZE = struct.calcsize(_DILOCO_FMT)  # 46
 _DILOCO_FILE_SIZE = 64
@@ -434,6 +434,12 @@ def main() -> None:
         action="store_true",
         help="Run binary format verification and exit",
     )
+    parser.add_argument(
+        "--mmap-dir",
+        type=Path,
+        default=None,
+        help="Directory for mmap files (default: SOLPROBE_MMAP_DIR or /tmp)",
+    )
     args = parser.parse_args()
 
     if args.verify:
@@ -441,13 +447,16 @@ def main() -> None:
         return
 
     node_id = args.node_id
-    train_path = Path(f"/tmp/solprobe_training_{node_id}.bin")
-    diloco_path = Path(f"/tmp/solprobe_diloco_{node_id}.bin")
+    mmap_dir = args.mmap_dir or Path(os.environ.get("SOLPROBE_MMAP_DIR", "/tmp"))
+    mmap_dir.mkdir(parents=True, exist_ok=True)
+    train_path = mmap_dir / f"solprobe_training_{node_id}.bin"
+    diloco_path = mmap_dir / f"solprobe_diloco_{node_id}.bin"
 
     print(f"SolProbe Simulator")
     print(f"  node_id:    {node_id}")
     print(f"  scenario:   {args.scenario}")
     print(f"  duration:   {'indefinite' if args.duration == 0 else args.duration}")
+    print(f"  mmap dir:   {mmap_dir}")
     print(f"  train file: {train_path}")
     print(f"  diloco file:{diloco_path}")
     print()

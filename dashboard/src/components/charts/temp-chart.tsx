@@ -2,6 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from "recharts";
 import type { GpuMetrics } from "@/lib/types";
+import { isGpuTempAvailable } from "@/lib/derive";
 
 interface TempChartProps {
   data: GpuMetrics[];
@@ -10,7 +11,7 @@ interface TempChartProps {
 export function TempChart({ data }: TempChartProps) {
   const chartData = data.map((d) => ({
     time: new Date(d.timestamp_ms).toLocaleTimeString(),
-    temp: d.gpu_temp_c,
+    temp: isGpuTempAvailable(d) ? d.gpu_temp_c : null,
   }));
 
   return (

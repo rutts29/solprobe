@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { memPct, nodeTone, tempTone } from "@/lib/derive";
+import { gpuTempTone, isGpuTempAvailable, memPct, nodeTone } from "@/lib/derive";
 import type { NodeStatus } from "@/lib/types";
 
 interface ClusterSummaryProps {
@@ -88,7 +88,8 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
               {visible.map((node) => {
                 const gpu = node.latest_metrics[0] ?? null;
                 const tone = nodeTone(node);
-                const tTone = gpu ? tempTone(gpu.gpu_temp_c) : "muted";
+                const tempAvailable = gpu ? isGpuTempAvailable(gpu, node) : false;
+                const tTone = gpu ? gpuTempTone(gpu, node) : "muted";
                 return (
                   <tr
                     key={node.node_id}
@@ -112,7 +113,7 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
                           tTone === "warn" && "text-amber-500 dark:text-amber-400",
                           tTone === "ok" && "text-foreground",
                         )}>
-                          {gpu.gpu_temp_c}°C
+                          {tempAvailable ? `${gpu.gpu_temp_c}°C` : "—"}
                         </span>
                       ) : "—"}
                     </td>

@@ -52,6 +52,32 @@ describe("solprobe-attestation", () => {
     assert.equal(att.verified, false);
   });
 
+  it("accepts realistic GPU model names", async () => {
+    const jobId = "test-job-apple";
+    const step = new anchor.BN(1);
+    const checkpointHash = Buffer.alloc(32, 5);
+    const gpuModel = "Apple Silicon";
+    const metricsHash = Buffer.alloc(32, 6);
+
+    await program.methods
+      .submitAttestation(jobId, step, Array.from(checkpointHash), gpuModel, Array.from(metricsHash))
+      .accounts({})
+      .rpc();
+
+    const [attPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("attestation"),
+        Buffer.from(jobId),
+        step.toArrayLike(Buffer, "le", 8),
+        admin.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    const att = await program.account.attestation.fetch(attPda);
+    assert.equal(att.jobId, jobId);
+    assert.equal(att.gpuModel, gpuModel);
+  });
+
   it("verifies attestation", async () => {
     const jobId = "test-job-001";
     const step = new anchor.BN(42);
