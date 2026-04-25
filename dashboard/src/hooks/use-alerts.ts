@@ -8,11 +8,14 @@ export function useAlerts(params?: { severity?: string; node_id?: string; limit?
   const [alerts, setAlerts] = useState<AlertModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const severity = params?.severity;
+  const nodeId = params?.node_id;
+  const limit = params?.limit;
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchAlerts(params);
+      const data = await fetchAlerts({ severity, node_id: nodeId, limit });
       setAlerts(data);
       setError(null);
     } catch (e) {
@@ -20,7 +23,7 @@ export function useAlerts(params?: { severity?: string; node_id?: string; limit?
     } finally {
       setLoading(false);
     }
-  }, [params?.severity, params?.node_id, params?.limit]);
+  }, [severity, nodeId, limit]);
 
   useEffect(() => {
     refresh();
@@ -37,10 +40,13 @@ export function useDiagnoses(params?: { node_id?: string; root_cause?: string; l
   const [diagnoses, setDiagnoses] = useState<DiagnosisResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const nodeId = params?.node_id;
+  const rootCause = params?.root_cause;
+  const limit = params?.limit;
 
   const refresh = useCallback(async () => {
     try {
-      const data = await fetchDiagnoses(params);
+      const data = await fetchDiagnoses({ node_id: nodeId, root_cause: rootCause, limit });
       setDiagnoses(data);
       setError(null);
     } catch (e) {
@@ -48,7 +54,7 @@ export function useDiagnoses(params?: { node_id?: string; root_cause?: string; l
     } finally {
       setLoading(false);
     }
-  }, [params?.node_id, params?.root_cause, params?.limit]);
+  }, [nodeId, rootCause, limit]);
 
   useEffect(() => {
     refresh();
