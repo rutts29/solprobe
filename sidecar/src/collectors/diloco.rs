@@ -20,18 +20,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const DILOCO_RECORD_SIZE: usize = 46;
 
 /// Reads DiLoCoMetrics from a memory-mapped file written by the training loop.
-/// File path: `/tmp/solprobe_diloco_{node_id}.bin`
+/// File path: `{mmap_dir}/solprobe_diloco_{node_id}.bin`
 pub struct DiLoCoMetricsReader {
     node_id: String,
+    mmap_dir: PathBuf,
 }
 
 impl DiLoCoMetricsReader {
     pub fn new(node_id: String) -> Self {
-        Self { node_id }
+        Self::with_mmap_dir(node_id, PathBuf::from("/tmp"))
+    }
+
+    pub fn with_mmap_dir(node_id: String, mmap_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            node_id,
+            mmap_dir: mmap_dir.into(),
+        }
     }
 
     fn file_path(&self) -> PathBuf {
-        PathBuf::from(format!("/tmp/solprobe_diloco_{}.bin", self.node_id))
+        self.mmap_dir
+            .join(format!("solprobe_diloco_{}.bin", self.node_id))
     }
 
     /// Attempt to read the latest DiLoCo metrics from the shared-memory file.
@@ -96,5 +105,29 @@ impl DiLoCoMetricsReader {
             worker_speed_ratio,
             is_straggler,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_file_path_uses_configured_mmap_dir() {
+        let mmap_dir = PathBuf::from("/var/lib/solprobe/mmap");
+        let reader = DiLoCoMetricsReader::with_mmap_dir("node-a".to_string(), mmap_dir.clone());
+        assert_eq!(
+            reader.file_path(),
+            mmap_dir.join("solprobe_diloco_node-a.bin")
+        );
+    }
+
+    #[test]
+    fn test_new_defaults_to_tmp() {
+        let reader = DiLoCoMetricsReader::new("node-a".to_string());
+        assert_eq!(
+            reader.file_path(),
+            PathBuf::from("/tmp").join("solprobe_diloco_node-a.bin")
+        );
     }
 }

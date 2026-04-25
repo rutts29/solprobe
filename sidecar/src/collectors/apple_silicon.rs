@@ -4,6 +4,7 @@ use super::{CollectorError, MetricCollector};
 use crate::proto::solprobe::v1::{GpuMetrics, MetricsBatch};
 use std::collections::HashMap;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -31,10 +32,18 @@ pub struct AppleSiliconCollector {
 
 impl AppleSiliconCollector {
     pub fn new(node_id: String) -> Self {
+        Self::with_mmap_dir(node_id, PathBuf::from("/tmp"))
+    }
+
+    pub fn with_mmap_dir(node_id: String, mmap_dir: impl Into<PathBuf>) -> Self {
+        let mmap_dir = mmap_dir.into();
         tracing::info!(node_id = %node_id, "Apple Silicon GPU collector initialized");
         Self {
-            training_reader: TrainingMetricsReader::new(node_id.clone()),
-            diloco_reader: DiLoCoMetricsReader::new(node_id.clone()),
+            training_reader: TrainingMetricsReader::with_mmap_dir(
+                node_id.clone(),
+                mmap_dir.clone(),
+            ),
+            diloco_reader: DiLoCoMetricsReader::with_mmap_dir(node_id.clone(), mmap_dir),
             node_id,
         }
     }
@@ -46,7 +55,9 @@ impl AppleSiliconCollector {
             .map_err(|e| CollectorError::Unavailable(format!("ioreg failed: {e}")))?;
 
         if !output.status.success() {
-            return Err(CollectorError::Other("ioreg returned non-zero exit code".into()));
+            return Err(CollectorError::Other(
+                "ioreg returned non-zero exit code".into(),
+            ));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -70,7 +81,10 @@ impl AppleSiliconCollector {
         }
 
         let device_util = perf_stats.get("Device Utilization %").copied().unwrap_or(0);
-        let renderer_util = perf_stats.get("Renderer Utilization %").copied().unwrap_or(0);
+        let renderer_util = perf_stats
+            .get("Renderer Utilization %")
+            .copied()
+            .unwrap_or(0);
         let tiler_util = perf_stats.get("Tiler Utilization %").copied().unwrap_or(0);
         let in_use_bytes = perf_stats.get("In use system memory").copied().unwrap_or(0);
 
@@ -89,18 +103,18 @@ impl AppleSiliconCollector {
             gpu_index: 0,
             gpu_model: "Apple Silicon".to_string(),
             timestamp_ms,
-            gpu_temp_c: 0.0,        // requires sudo powermetrics
-            memory_temp_c: 0.0,     // N/A on Apple Silicon
+            gpu_temp_c: 0.0,    // requires sudo powermetrics
+            memory_temp_c: 0.0, // N/A on Apple Silicon
             gpu_utilization_pct: device_util as f32,
             mem_copy_utilization_pct: 0.0,
             fb_used_mb,
             fb_free_mb,
-            power_usage_w: 0.0,     // requires sudo powermetrics
-            xid_errors: 0,          // NVIDIA-specific
-            ecc_sbe_count: 0,       // NVIDIA-specific
-            ecc_dbe_count: 0,       // NVIDIA-specific
+            power_usage_w: 0.0,        // requires sudo powermetrics
+            xid_errors: 0,             // NVIDIA-specific
+            ecc_sbe_count: 0,          // NVIDIA-specific
+            ecc_dbe_count: 0,          // NVIDIA-specific
             clock_throttle_reasons: 0, // NVIDIA-specific
-            pcie_replay_counter: 0, // no discrete PCIe bus
+            pcie_replay_counter: 0,    // no discrete PCIe bus
             pcie_tx_bytes_per_sec: 0.0,
             pcie_rx_bytes_per_sec: 0.0,
             sm_active_pct: renderer_util as f32,
@@ -117,9 +131,7 @@ impl AppleSiliconCollector {
     /// {"key1"=val1,"key2"=val2,...}
     fn parse_iokit_dict(dict_str: &str) -> HashMap<String, i64> {
         let mut map = HashMap::new();
-        let inner = dict_str
-            .trim_start_matches('{')
-            .trim_end_matches('}');
+        let inner = dict_str.trim_start_matches('{').trim_end_matches('}');
         for entry in inner.split(',') {
             let entry = entry.trim();
             if let Some(eq_pos) = entry.rfind('=') {

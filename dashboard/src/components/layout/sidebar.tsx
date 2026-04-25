@@ -60,8 +60,8 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
     >
       {/* Logo */}
       <div className="flex h-14 items-center border-b px-3">
-        <Link
-          href="/"
+        <a
+          href="/landing.html"
           aria-label="Open SolProbe landing page"
           className={cn(
             "flex min-w-0 items-center gap-2 rounded-md focus:outline-none focus:ring-2 focus:ring-ring",
@@ -75,7 +75,7 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
               <span className="text-foreground">Sol</span><span className="font-medium text-muted-foreground">Probe</span>
             </span>
           )}
-        </Link>
+        </a>
       </div>
 
       {/* Cluster picker */}

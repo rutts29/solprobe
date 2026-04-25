@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkline } from "@/components/ui/sparkline";
 import type { NodeStatus } from "@/lib/types";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { memPct, nodeTone, tempTone } from "@/lib/derive";
+import { gpuTempTone, isGpuPowerAvailable, isGpuTempAvailable, memPct, nodeTone } from "@/lib/derive";
 
 interface NodeCardProps {
   node: NodeStatus;
@@ -39,7 +39,9 @@ function Bar({ value, tone = "ok", label }: { value: number; tone?: "ok" | "warn
 export function NodeCard({ node, utilHistory }: NodeCardProps) {
   const gpu = node.latest_metrics[0] ?? null;
   const tone = nodeTone(node);
-  const tTone = gpu ? tempTone(gpu.gpu_temp_c) : "muted";
+  const tempAvailable = gpu ? isGpuTempAvailable(gpu, node) : false;
+  const powerAvailable = gpu ? isGpuPowerAvailable(gpu, node) : false;
+  const tTone = gpu ? gpuTempTone(gpu, node) : "muted";
   const memValue = gpu ? memPct(gpu) : 0;
   const series = utilHistory && utilHistory.length > 1 ? utilHistory : Array(12).fill(gpu?.gpu_utilization_pct ?? 0);
 
@@ -76,11 +78,11 @@ export function NodeCard({ node, utilHistory }: NodeCardProps) {
                       tTone === "warn" && "text-amber-500 dark:text-amber-400",
                       tTone === "ok" && "text-foreground",
                     )}>
-                      {gpu.gpu_temp_c}°C
+                      {tempAvailable ? `${gpu.gpu_temp_c}°C` : "—"}
                     </span>
                   </span>
                   <span className="text-muted-foreground">
-                    Power <span className="font-mono tabular-nums text-foreground">{gpu.power_usage_w}W</span>
+                    Power <span className="font-mono tabular-nums text-foreground">{powerAvailable ? `${gpu.power_usage_w}W` : "—"}</span>
                   </span>
                 </div>
                 <span className="text-muted-foreground">{formatRelativeTime(node.last_seen_ms)}</span>

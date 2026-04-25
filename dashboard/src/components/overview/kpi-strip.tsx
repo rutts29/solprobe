@@ -156,13 +156,13 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
       />
       <KpiCard
         label="Cluster power"
-        value={power.toFixed(1)}
-        unit="kW"
-        delta={`avg ${temp.toFixed(0)}°C`}
-        trend={temp > 75 ? "up" : "flat"}
+        value={power === null ? "—" : power.toFixed(1)}
+        unit={power === null ? undefined : "kW"}
+        delta={temp === null ? "avg temp —" : `avg ${temp.toFixed(0)}°C`}
+        trend={temp !== null && temp > 75 ? "up" : "flat"}
         icon={Zap}
         iconTone="text-amber-500 dark:text-amber-400"
-        spark={history?.power ?? flat(power)}
+        spark={history?.power ?? (power === null ? [] : flat(power))}
         sparkColor="var(--warn)"
       />
     </div>

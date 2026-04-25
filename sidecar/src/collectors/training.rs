@@ -17,18 +17,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const TRAINING_RECORD_SIZE: usize = 37;
 
 /// Reads TrainingMetrics from a memory-mapped file written by a PyTorch callback.
-/// File path: `/tmp/solprobe_training_{node_id}.bin`
+/// File path: `{mmap_dir}/solprobe_training_{node_id}.bin`
 pub struct TrainingMetricsReader {
     node_id: String,
+    mmap_dir: PathBuf,
 }
 
 impl TrainingMetricsReader {
     pub fn new(node_id: String) -> Self {
-        Self { node_id }
+        Self::with_mmap_dir(node_id, PathBuf::from("/tmp"))
+    }
+
+    pub fn with_mmap_dir(node_id: String, mmap_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            node_id,
+            mmap_dir: mmap_dir.into(),
+        }
     }
 
     fn file_path(&self) -> PathBuf {
-        PathBuf::from(format!("/tmp/solprobe_training_{}.bin", self.node_id))
+        self.mmap_dir
+            .join(format!("solprobe_training_{}.bin", self.node_id))
     }
 
     /// Attempt to read the latest training metrics from the shared-memory file.
@@ -128,7 +137,12 @@ mod tests {
     #[test]
     fn test_read_valid_file() {
         let node_id = format!("test_valid_{}", std::process::id());
-        let path = PathBuf::from(format!("/tmp/solprobe_training_{}.bin", node_id));
+        let mmap_dir = std::env::temp_dir().join(format!(
+            "solprobe_training_test_{}_valid",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&mmap_dir).unwrap();
+        let path = mmap_dir.join(format!("solprobe_training_{}.bin", node_id));
 
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -136,7 +150,7 @@ mod tests {
             .as_millis() as i64;
         write_test_file(&path, 1, now_ms, 42, 2.5, 1.2, 3e-4, 5000.0, 45.0);
 
-        let reader = TrainingMetricsReader::new(node_id);
+        let reader = TrainingMetricsReader::with_mmap_dir(node_id, mmap_dir.clone());
         let metrics = reader.read().expect("Should parse valid file");
 
         assert!((metrics.timestamp_ms - now_ms).abs() < 1000);
@@ -148,12 +162,18 @@ mod tests {
         assert!((metrics.mfu_pct - 45.0).abs() < 1e-6);
 
         std::fs::remove_file(&path).ok();
+        std::fs::remove_dir(&mmap_dir).ok();
     }
 
     #[test]
     fn test_read_invalid_flag_returns_none() {
         let node_id = format!("test_invalid_{}", std::process::id());
-        let path = PathBuf::from(format!("/tmp/solprobe_training_{}.bin", node_id));
+        let mmap_dir = std::env::temp_dir().join(format!(
+            "solprobe_training_test_{}_invalid",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&mmap_dir).unwrap();
+        let path = mmap_dir.join(format!("solprobe_training_{}.bin", node_id));
 
         let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -161,16 +181,40 @@ mod tests {
             .as_millis() as i64;
         write_test_file(&path, 0, now_ms, 10, 1.0, 0.5, 1e-4, 3000.0, 40.0);
 
-        let reader = TrainingMetricsReader::new(node_id);
+        let reader = TrainingMetricsReader::with_mmap_dir(node_id, mmap_dir.clone());
         assert!(reader.read().is_none(), "valid_flag=0 should return None");
 
         std::fs::remove_file(&path).ok();
+        std::fs::remove_dir(&mmap_dir).ok();
     }
 
     #[test]
     fn test_read_missing_file_returns_none() {
         let node_id = format!("test_missing_{}", std::process::id());
-        let reader = TrainingMetricsReader::new(node_id);
+        let mmap_dir = std::env::temp_dir().join(format!(
+            "solprobe_training_test_{}_missing",
+            std::process::id()
+        ));
+        let reader = TrainingMetricsReader::with_mmap_dir(node_id, mmap_dir);
         assert!(reader.read().is_none(), "Missing file should return None");
+    }
+
+    #[test]
+    fn test_file_path_uses_configured_mmap_dir() {
+        let mmap_dir = PathBuf::from("/var/lib/solprobe/mmap");
+        let reader = TrainingMetricsReader::with_mmap_dir("node-a".to_string(), mmap_dir.clone());
+        assert_eq!(
+            reader.file_path(),
+            mmap_dir.join("solprobe_training_node-a.bin")
+        );
+    }
+
+    #[test]
+    fn test_new_defaults_to_tmp() {
+        let reader = TrainingMetricsReader::new("node-a".to_string());
+        assert_eq!(
+            reader.file_path(),
+            PathBuf::from("/tmp").join("solprobe_training_node-a.bin")
+        );
     }
 }

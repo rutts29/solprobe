@@ -2,7 +2,9 @@ global:
   namespace: solprobe
 
 backend:
-  replicas: 2
+  # Keep a single backend pod until metrics, alerts, diagnoses, and websocket
+  # clients move from process-local memory to shared external state.
+  replicas: 1
   image: rutts29/solprobe-backend:v0.1.0
   port: 8000
   grpcPort: 50051
@@ -20,6 +22,12 @@ sidecar:
   image: rutts29/solprobe-sidecar:v0.1.0
   metricsPort: 9100
   simulate: false
+  mmap:
+    # Training workloads on the same node must mount and write to this same
+    # host path, otherwise the sidecar cannot read their mmap files.
+    dir: /var/lib/solprobe/mmap
+    hostPath: /var/lib/solprobe/mmap
+    hostPathType: DirectoryOrCreate
   resources:
     requests:
       memory: 128Mi

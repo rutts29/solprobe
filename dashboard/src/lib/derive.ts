@@ -3,6 +3,22 @@ import type { NodeStatus, GpuMetrics, AlertModel } from "./types";
 
 export type HealthTone = "ok" | "warn" | "crit" | "muted";
 
+export function isAppleSiliconModel(gpuModel: string | null | undefined): boolean {
+  return gpuModel === "Apple Silicon";
+}
+
+function gpuModelFor(gpu: GpuMetrics, node?: Pick<NodeStatus, "gpu_model">): string {
+  return gpu.gpu_model || node?.gpu_model || "";
+}
+
+export function isGpuTempAvailable(gpu: GpuMetrics, node?: Pick<NodeStatus, "gpu_model">): boolean {
+  return !(isAppleSiliconModel(gpuModelFor(gpu, node)) && gpu.gpu_temp_c === 0);
+}
+
+export function isGpuPowerAvailable(gpu: GpuMetrics, node?: Pick<NodeStatus, "gpu_model">): boolean {
+  return !(isAppleSiliconModel(gpuModelFor(gpu, node)) && gpu.power_usage_w === 0);
+}
+
 /** Average GPU utilization across every GPU on every connected node. */
 export function avgGpuUtilization(nodes: NodeStatus[]): number {
   const utils: number[] = [];
@@ -10,17 +26,29 @@ export function avgGpuUtilization(nodes: NodeStatus[]): number {
   return utils.length ? utils.reduce((a, b) => a + b, 0) / utils.length : 0;
 }
 
-/** Average GPU temp across every GPU on every connected node. */
-export function avgGpuTemp(nodes: NodeStatus[]): number {
+/** Average supported GPU temp across every GPU on every connected node. */
+export function avgGpuTemp(nodes: NodeStatus[]): number | null {
   const temps: number[] = [];
-  for (const n of nodes) for (const m of n.latest_metrics) temps.push(m.gpu_temp_c);
-  return temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : 0;
+  for (const n of nodes) {
+    for (const m of n.latest_metrics) {
+      if (isGpuTempAvailable(m, n)) temps.push(m.gpu_temp_c);
+    }
+  }
+  return temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : null;
 }
 
-/** Sum of power_usage_w across every GPU on every connected node. */
-export function totalPowerKw(nodes: NodeStatus[]): number {
+/** Sum of supported power_usage_w across every GPU on every connected node. */
+export function totalPowerKw(nodes: NodeStatus[]): number | null {
   let watts = 0;
-  for (const n of nodes) for (const m of n.latest_metrics) watts += m.power_usage_w;
+  let samples = 0;
+  for (const n of nodes) {
+    for (const m of n.latest_metrics) {
+      if (!isGpuPowerAvailable(m, n)) continue;
+      watts += m.power_usage_w;
+      samples++;
+    }
+  }
+  if (samples === 0) return null;
   return watts / 1000;
 }
 
@@ -37,13 +65,18 @@ export function tempTone(c: number): HealthTone {
   return "ok";
 }
 
+export function gpuTempTone(gpu: GpuMetrics, node?: Pick<NodeStatus, "gpu_model">): HealthTone {
+  if (!isGpuTempAvailable(gpu, node)) return "muted";
+  return tempTone(gpu.gpu_temp_c);
+}
+
 /** Tone for a node based on staleness + per-GPU temp. */
 export function nodeTone(node: NodeStatus, now: number = Date.now()): HealthTone {
   const stale = now - node.last_seen_ms > 60_000;
   if (stale) return "muted";
   const gpu = node.latest_metrics[0];
   if (!gpu) return "muted";
-  return tempTone(gpu.gpu_temp_c);
+  return gpuTempTone(gpu, node);
 }
 
 /** Throughput across all training metrics (sum of tps). */

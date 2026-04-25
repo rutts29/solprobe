@@ -2,6 +2,8 @@ use anchor_lang::prelude::*;
 
 declare_id!("CBx4v7NFTMbiigjYxCckgany73xH9tGFJL2PAMZcvn4n");
 
+const MAX_GPU_MODEL_LEN: usize = 32;
+
 #[program]
 pub mod solprobe_attestation {
     use super::*;
@@ -10,7 +12,10 @@ pub mod solprobe_attestation {
         ctx: Context<InitializeConfig>,
         max_attestation_age_seconds: i64,
     ) -> Result<()> {
-        require!(max_attestation_age_seconds > 0, AttestationError::InvalidConfig);
+        require!(
+            max_attestation_age_seconds > 0,
+            AttestationError::InvalidConfig
+        );
         let config = &mut ctx.accounts.config;
         config.admin = ctx.accounts.admin.key();
         config.max_attestation_age_seconds = max_attestation_age_seconds;
@@ -27,7 +32,10 @@ pub mod solprobe_attestation {
         metrics_hash: [u8; 32],
     ) -> Result<()> {
         require!(job_id.len() <= 32, AttestationError::JobIdTooLong);
-        require!(gpu_model.len() <= 8, AttestationError::GpuModelTooLong);
+        require!(
+            gpu_model.len() <= MAX_GPU_MODEL_LEN,
+            AttestationError::GpuModelTooLong
+        );
 
         let clock = Clock::get()?;
         let attestation = &mut ctx.accounts.attestation;
@@ -55,7 +63,8 @@ pub mod solprobe_attestation {
 
         let clock = Clock::get()?;
         let config = &ctx.accounts.config;
-        let age = clock.unix_timestamp
+        let age = clock
+            .unix_timestamp
             .checked_sub(attestation.timestamp)
             .ok_or(AttestationError::AttestationTooOld)?;
         require!(
@@ -148,7 +157,7 @@ pub struct Attestation {
     pub job_id: String,
     pub step: u64,
     pub checkpoint_hash: [u8; 32],
-    #[max_len(8)]
+    #[max_len(32)]
     pub gpu_model: String,
     pub metrics_hash: [u8; 32],
     pub timestamp: i64,
@@ -174,7 +183,7 @@ pub struct AttestationVerified {
 pub enum AttestationError {
     #[msg("Job ID exceeds maximum length of 32 bytes")]
     JobIdTooLong,
-    #[msg("GPU model exceeds maximum length of 8 bytes")]
+    #[msg("GPU model exceeds maximum length of 32 bytes")]
     GpuModelTooLong,
     #[msg("Attestation has already been verified")]
     AlreadyVerified,

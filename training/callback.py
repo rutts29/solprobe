@@ -1,7 +1,9 @@
 """PyTorch training callback that writes metrics to a memory-mapped file.
 
-The Rust sidecar reads the binary file at /tmp/solprobe_training_{node_id}.bin
-to ingest training telemetry without any IPC overhead beyond a shared mmap.
+The Rust sidecar reads the binary file at
+{mmap_dir}/solprobe_training_{node_id}.bin to ingest training telemetry without
+any IPC overhead beyond a shared mmap. The directory defaults to /tmp and can be
+overridden with the SOLPROBE_MMAP_DIR environment variable.
 
 Binary layout (little-endian, 64 bytes padded):
   Offset  Size  Type  Field
@@ -88,12 +90,22 @@ class SolProbeCallback:
         Theoretical peak tokens-per-second for the hardware, used to
         estimate MFU percentage.  Defaults to ``15000.0`` (reasonable
         for a single T4 running a small transformer).
+    mmap_dir : str | pathlib.Path | None
+        Directory for the backing mmap file. Defaults to
+        ``SOLPROBE_MMAP_DIR`` or ``/tmp``.
     """
 
-    def __init__(self, node_id: str = "node-0", peak_tps: float = 15000.0) -> None:
+    def __init__(
+        self,
+        node_id: str = "node-0",
+        peak_tps: float = 15000.0,
+        mmap_dir: str | Path | None = None,
+    ) -> None:
         self.node_id = node_id
         self.peak_tps = peak_tps
-        self._path = Path(f"/tmp/solprobe_training_{node_id}.bin")
+        self._mmap_dir = Path(mmap_dir or os.environ.get("SOLPROBE_MMAP_DIR", "/tmp"))
+        self._mmap_dir.mkdir(parents=True, exist_ok=True)
+        self._path = self._mmap_dir / f"solprobe_training_{node_id}.bin"
         self._closed = False
 
         # Create / truncate the backing file to _FILE_SIZE bytes.
