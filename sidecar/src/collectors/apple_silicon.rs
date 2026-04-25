@@ -1,3 +1,5 @@
+use super::diloco::DiLoCoMetricsReader;
+use super::training::TrainingMetricsReader;
 use super::{CollectorError, MetricCollector};
 use crate::proto::solprobe::v1::{GpuMetrics, MetricsBatch};
 use std::collections::HashMap;
@@ -23,12 +25,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 ///   - xid_errors, ecc_*, clock_throttle_reasons, pcie_* (no Apple equivalent)
 pub struct AppleSiliconCollector {
     node_id: String,
+    training_reader: TrainingMetricsReader,
+    diloco_reader: DiLoCoMetricsReader,
 }
 
 impl AppleSiliconCollector {
     pub fn new(node_id: String) -> Self {
         tracing::info!(node_id = %node_id, "Apple Silicon GPU collector initialized");
-        Self { node_id }
+        Self {
+            training_reader: TrainingMetricsReader::new(node_id.clone()),
+            diloco_reader: DiLoCoMetricsReader::new(node_id.clone()),
+            node_id,
+        }
     }
 
     fn collect_sync(&self) -> Result<GpuMetrics, CollectorError> {
@@ -140,11 +148,28 @@ impl MetricCollector for AppleSiliconCollector {
     ) -> Pin<Box<dyn Future<Output = Result<MetricsBatch, CollectorError>> + Send + '_>> {
         Box::pin(async {
             let gpu = self.collect_sync()?;
-            Ok(MetricsBatch {
+            let mut batch = MetricsBatch {
                 gpu: vec![gpu],
                 training: None,
                 diloco: None,
-            })
+            };
+
+            // Pick up training metrics from any PyTorch process writing to mmap.
+            // Without this, MPS training scripts (train_mps.py, nanochat fork, etc.)
+            // would have their loss/throughput/grad_norm written but never observed.
+            if let Some(training) = self.training_reader.read() {
+                tracing::debug!("Read training metrics from mmap (step={})", training.step);
+                batch.training = Some(training);
+            }
+            if let Some(diloco) = self.diloco_reader.read() {
+                tracing::debug!(
+                    "Read DiLoCo metrics from mmap (inner_step={})",
+                    diloco.inner_step
+                );
+                batch.diloco = Some(diloco);
+            }
+
+            Ok(batch)
         })
     }
 }
