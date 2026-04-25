@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -144,8 +145,16 @@ async def _prom_gauge_loop() -> None:
             logger.exception("Error updating Prometheus gauges (failure #%d)", consecutive_failures)
 
 
+_FAILED_RETRY_COOLDOWN_MS = 60_000  # retry failed diagnoses at most once a minute
+
+
 async def _auto_diagnosis_loop() -> None:
-    """Automatically diagnose CRITICAL alerts that lack a successful diagnosis."""
+    """Automatically diagnose CRITICAL alerts that lack a successful diagnosis.
+
+    Skips any alert that already has a terminal diagnosis (completed, cached,
+    or rate_limited). Only retries failed ones, and only after a cooldown
+    so a persistent fault doesn't burn API calls in a tight loop.
+    """
     consecutive_failures = 0
     while True:
         delay = 5 * min(2 ** consecutive_failures, 30)
@@ -153,12 +162,19 @@ async def _auto_diagnosis_loop() -> None:
         try:
             critical_alerts = alert_store.query(severity="CRITICAL", limit=20)
             agent = get_or_create_agent()
+            now_ms = int(time.time() * 1000)
             for alert in critical_alerts:
                 existing = diagnosis_store.get_by_alert_id(alert.alert_id)
-                if existing is not None and existing.status == "completed":
-                    continue
+                if existing is not None:
+                    # Terminal successes and rate-limit stubs do not retry.
+                    if existing.status in ("completed", "cached", "rate_limited"):
+                        continue
+                    # Failed diagnoses retry after cooldown — avoids tight-loop
+                    # burning LLM calls when a persistent issue exists.
+                    if existing.status == "failed" and (now_ms - existing.timestamp_ms) < _FAILED_RETRY_COOLDOWN_MS:
+                        continue
                 result = await asyncio.to_thread(agent.diagnose, alert)
-                if result.status == "completed":
+                if result.status in ("completed", "cached"):
                     await ws_manager.broadcast_diagnosis(result)
             consecutive_failures = 0
         except Exception:
