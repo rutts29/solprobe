@@ -11,19 +11,21 @@ export function useRealtime(
     onDiagnosis?: (msg: Extract<WebSocketMessage, { type: "diagnosis" }>) => void;
   }
 ) {
+  const { onAlert, onMetricSummary, onDiagnosis } = handlers;
+
   useEffect(() => {
     return subscribe((msg) => {
       switch (msg.type) {
         case "alert":
-          handlers.onAlert?.(msg);
+          onAlert?.(msg);
           break;
         case "metric_summary":
-          handlers.onMetricSummary?.(msg);
+          onMetricSummary?.(msg);
           break;
         case "diagnosis":
-          handlers.onDiagnosis?.(msg);
+          onDiagnosis?.(msg);
           break;
       }
     });
-  }, [subscribe, handlers.onAlert, handlers.onMetricSummary, handlers.onDiagnosis]);
+  }, [subscribe, onAlert, onMetricSummary, onDiagnosis]);
 }
