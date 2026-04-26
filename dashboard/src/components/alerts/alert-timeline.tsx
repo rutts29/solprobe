@@ -5,25 +5,28 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "./severity-badge";
 import { Badge } from "@/components/ui/badge";
-import type { AlertModel } from "@/lib/types";
+import type { AlertModel, DiagnosisResult } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
 import { requestDiagnosis } from "@/lib/api";
 
 interface AlertTimelineProps {
   alerts: AlertModel[];
   onSelectAlert: (alert: AlertModel) => void;
+  onDiagnosisCreated?: (alert: AlertModel, diagnosis: DiagnosisResult) => void;
 }
 
-export function AlertTimeline({ alerts, onSelectAlert }: AlertTimelineProps) {
+export function AlertTimeline({ alerts, onSelectAlert, onDiagnosisCreated }: AlertTimelineProps) {
   const [diagnosing, setDiagnosing] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  async function handleDiagnose(alertId: string, e: React.MouseEvent) {
+  async function handleDiagnose(alert: AlertModel, e: React.MouseEvent) {
     e.stopPropagation();
+    const alertId = alert.alert_id;
     setDiagnosing((s) => new Set(s).add(alertId));
     setErrors((prev) => { const next = { ...prev }; delete next[alertId]; return next; });
     try {
-      await requestDiagnosis(alertId);
+      const diagnosis = await requestDiagnosis(alertId);
+      onDiagnosisCreated?.(alert, diagnosis);
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
@@ -76,7 +79,7 @@ export function AlertTimeline({ alerts, onSelectAlert }: AlertTimelineProps) {
                   size="sm"
                   className="h-6 text-xs"
                   disabled={diagnosing.has(alert.alert_id)}
-                  onClick={(e) => handleDiagnose(alert.alert_id, e)}
+                  onClick={(e) => handleDiagnose(alert, e)}
                 >
                   {diagnosing.has(alert.alert_id) ? "Diagnosing..." : "Diagnose"}
                 </Button>

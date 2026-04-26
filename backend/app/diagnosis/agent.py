@@ -364,7 +364,7 @@ class DiagnosisAgent:
         start_ms: int,
     ) -> DiagnosisResult | None:
         """Build a rule-based diagnosis for alert types with clear recovery semantics."""
-        if alert.alert_type not in {"gradient_explosion", "loss_spike"}:
+        if alert.alert_type not in {"gradient_explosion", "loss_spike", "straggler_detected"}:
             return None
 
         evidence = alert.evidence or {}
@@ -375,7 +375,7 @@ class DiagnosisAgent:
                 EvidenceItem(
                     metric="gradient_norm",
                     value=str(evidence["gradient_norm"]),
-                    context=f"exceeds critical threshold {threshold}",
+                    context=f"exceeds configured threshold {threshold}",
                 ),
             )
         if "loss" in evidence:
@@ -392,6 +392,22 @@ class DiagnosisAgent:
                     metric="step",
                     value=str(evidence["step"]),
                     context="training step where the instability was observed",
+                ),
+            )
+        if "z_score" in evidence:
+            evidence_chain.append(
+                EvidenceItem(
+                    metric="z_score",
+                    value=str(evidence["z_score"]),
+                    context="statistical deviation reported by the central detector",
+                ),
+            )
+        if "field" in evidence:
+            evidence_chain.append(
+                EvidenceItem(
+                    metric="field",
+                    value=str(evidence["field"]),
+                    context="metric that triggered the anomaly detector",
                 ),
             )
         if not evidence_chain:
@@ -418,7 +434,7 @@ class DiagnosisAgent:
                 "rate and inspecting the triggering batch/checkpoint before continuing."
             )
             confidence = 0.78
-        else:
+        elif alert.alert_type == "loss_spike":
             root_cause = "data_corruption"
             action = RecommendedAction(
                 action="skip_corrupted_shard",
@@ -431,6 +447,22 @@ class DiagnosisAgent:
                 "recommends skipping or inspecting the current shard before resuming."
             )
             confidence = 0.7
+        else:
+            root_cause = "throughput_regression"
+            action = RecommendedAction(
+                action="inspect_node_throughput",
+                params={"node_id": alert.node_id},
+                urgency="soon" if alert.severity == "WARNING" else "immediate",
+            )
+            reasoning = (
+                "The central detector observed a statistically significant throughput drop "
+                "for this training node. That is consistent with an overloaded host, thermal "
+                "or memory pressure, checkpoint/sample overhead, or another process competing "
+                "for GPU resources. Claude diagnosis was unavailable, so this local fallback "
+                "recommends checking node load, recent training events, and GPU utilization "
+                "around the alert timestamp before rebalancing work."
+            )
+            confidence = 0.72
 
         return DiagnosisResult(
             diagnosis_id=diagnosis_id,
