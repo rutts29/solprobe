@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
 from app.diagnosis.agent import get_or_create_agent
 from app.diagnosis.models import DiagnosisRequest, DiagnosisResult
@@ -17,11 +19,62 @@ from app.diagnosis.store import diagnosis_store
 from app.enrichment import enrich_alert
 from app.models.alerts import AlertModel, EnrichedAlert, JobRegistration
 from app.models.metrics import GpuMetricsModel, NodeStatus
-from app.stores import alert_store, anomaly_store, job_store, metrics_store
+from app.stores import (
+    alert_lifecycle_store,
+    alert_store,
+    anomaly_store,
+    job_store,
+    metrics_store,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["solprobe"])
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle wrapper models — re-declare AlertModel fields flat so the existing
+# wire contract is preserved while adding `lifecycle`.
+# ---------------------------------------------------------------------------
+
+
+class AlertWithLifecycle(BaseModel):
+    alert_id: str
+    node_id: str
+    timestamp_ms: int
+    severity: str
+    source: str
+    alert_type: str
+    description: str
+    confidence: float
+    evidence: dict[str, str] = Field(default_factory=dict)
+    gpu_index: int | None = None
+    job_id: str | None = None
+    lifecycle: dict[str, Any] | None = None
+
+
+class EnrichedAlertWithLifecycle(BaseModel):
+    alert: AlertModel
+    recent_metrics: list[dict] = Field(default_factory=list)
+    node_history: list[AlertModel] = Field(default_factory=list)
+    correlated_events: list[AlertModel] = Field(default_factory=list)
+    lifecycle: dict[str, Any] | None = None
+
+
+class LifecycleStateRequest(BaseModel):
+    state: str
+
+
+class LifecycleNoteRequest(BaseModel):
+    text: str
+    author: str | None = None
+
+
+def _attach_lifecycle(alert: AlertModel) -> AlertWithLifecycle:
+    return AlertWithLifecycle(
+        **alert.model_dump(),
+        lifecycle=alert_lifecycle_store.get(alert.alert_id),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -80,24 +133,25 @@ async def get_node_metrics(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/alerts", response_model=list[AlertModel])
+@router.get("/alerts", response_model=list[AlertWithLifecycle])
 async def list_alerts(
     severity: str | None = Query(default=None, description="Filter by severity: INFO, WARNING, CRITICAL"),
     alert_type: str | None = Query(default=None, description="Filter by alert type"),
     node_id: str | None = Query(default=None, description="Filter by node ID"),
     limit: int = Query(default=50, ge=1, le=500),
-) -> list[AlertModel]:
+) -> list[AlertWithLifecycle]:
     """Return recent alerts with optional filters, newest first."""
-    return alert_store.query(
+    alerts = alert_store.query(
         node_id=node_id,
         severity=severity,
         alert_type=alert_type,
         limit=limit,
     )
+    return [_attach_lifecycle(a) for a in alerts]
 
 
-@router.get("/alerts/{alert_id}/enriched", response_model=EnrichedAlert)
-async def get_enriched_alert(alert_id: str) -> EnrichedAlert:
+@router.get("/alerts/{alert_id}/enriched", response_model=EnrichedAlertWithLifecycle)
+async def get_enriched_alert(alert_id: str) -> EnrichedAlertWithLifecycle:
     """Return an alert enriched with contextual data for diagnosis."""
     # Find the alert by ID
     all_alerts = alert_store.query(limit=1000)
@@ -108,7 +162,47 @@ async def get_enriched_alert(alert_id: str) -> EnrichedAlert:
             break
     if target is None:
         raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
-    return enrich_alert(target)
+    enriched = enrich_alert(target)
+    return EnrichedAlertWithLifecycle(
+        alert=enriched.alert,
+        recent_metrics=enriched.recent_metrics,
+        node_history=enriched.node_history,
+        correlated_events=enriched.correlated_events,
+        lifecycle=alert_lifecycle_store.get(alert_id),
+    )
+
+
+@router.patch("/alerts/{alert_id}/state")
+async def patch_alert_state(alert_id: str, body: LifecycleStateRequest) -> dict[str, Any]:
+    """Update the lifecycle state of an alert.
+
+    Valid states: acknowledged, investigating, resolved, ignored.
+    Returns the updated lifecycle dict.
+    """
+    if not _alert_exists(alert_id):
+        raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+    try:
+        return alert_lifecycle_store.set_state(alert_id, body.state)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/alerts/{alert_id}/notes")
+async def post_alert_note(alert_id: str, body: LifecycleNoteRequest) -> dict[str, Any]:
+    """Append a free-text note to an alert's lifecycle entry.
+
+    Returns the updated lifecycle dict.
+    """
+    if not _alert_exists(alert_id):
+        raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found")
+    return alert_lifecycle_store.add_note(alert_id, body.text, author=body.author)
+
+
+def _alert_exists(alert_id: str) -> bool:
+    for a in alert_store.query(limit=1000):
+        if a.alert_id == alert_id:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------

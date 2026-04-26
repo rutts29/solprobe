@@ -138,7 +138,7 @@ class TestJobsEndpoint:
         assert data["status"] == "registered"
 
     async def test_list_jobs(self, test_app, client):
-        _, _, _, _, js, _ = test_app
+        _, _, _, _, js, _, _ = test_app
         js.register("job-1", {"model": "llama"}, ["node-1"])
 
         resp = await client.get("/api/v1/jobs")
@@ -148,7 +148,7 @@ class TestJobsEndpoint:
         assert jobs[0]["job_id"] == "job-1"
 
     async def test_get_job(self, test_app, client):
-        _, _, _, _, js, _ = test_app
+        _, _, _, _, js, _, _ = test_app
         js.register("job-1", {"model": "llama"}, ["node-1"])
 
         resp = await client.get("/api/v1/jobs/job-1")
@@ -158,3 +158,126 @@ class TestJobsEndpoint:
     async def test_get_job_404(self, client):
         resp = await client.get("/api/v1/jobs/nonexistent")
         assert resp.status_code == 404
+
+
+class TestAlertLifecycleEndpoints:
+    async def test_patch_state_happy_path(self, test_app, client):
+        _, _, als, *_ = test_app
+        alert = _make_alert()
+        als.add(alert)
+
+        resp = await client.patch(
+            f"/api/v1/alerts/{alert.alert_id}/state",
+            json={"state": "acknowledged"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["state"] == "acknowledged"
+        assert body["notes"] == []
+
+    async def test_patch_state_unknown_alert_404(self, client):
+        resp = await client.patch(
+            "/api/v1/alerts/missing/state",
+            json={"state": "acknowledged"},
+        )
+        assert resp.status_code == 404
+
+    async def test_patch_state_invalid_value_400(self, test_app, client):
+        _, _, als, *_ = test_app
+        alert = _make_alert()
+        als.add(alert)
+
+        resp = await client.patch(
+            f"/api/v1/alerts/{alert.alert_id}/state",
+            json={"state": "totally-bogus"},
+        )
+        assert resp.status_code == 400
+
+    async def test_patch_state_idempotent(self, test_app, client):
+        _, _, als, *_ = test_app
+        alert = _make_alert()
+        als.add(alert)
+
+        first = await client.patch(
+            f"/api/v1/alerts/{alert.alert_id}/state",
+            json={"state": "investigating"},
+        )
+        second = await client.patch(
+            f"/api/v1/alerts/{alert.alert_id}/state",
+            json={"state": "investigating"},
+        )
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert second.json()["state"] == "investigating"
+
+    async def test_post_note_happy_path(self, test_app, client):
+        _, _, als, *_ = test_app
+        alert = _make_alert()
+        als.add(alert)
+
+        resp = await client.post(
+            f"/api/v1/alerts/{alert.alert_id}/notes",
+            json={"text": "checked logs", "author": "cara"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["notes"]) == 1
+        assert body["notes"][0]["text"] == "checked logs"
+        assert body["notes"][0]["author"] == "cara"
+
+    async def test_post_note_unknown_alert_404(self, client):
+        resp = await client.post(
+            "/api/v1/alerts/missing/notes",
+            json={"text": "hi"},
+        )
+        assert resp.status_code == 404
+
+    async def test_listing_includes_lifecycle(self, test_app, client):
+        _, _, als, *_ = test_app
+        alert = _make_alert()
+        als.add(alert)
+
+        # Set lifecycle state
+        await client.patch(
+            f"/api/v1/alerts/{alert.alert_id}/state",
+            json={"state": "acknowledged"},
+        )
+
+        resp = await client.get("/api/v1/alerts")
+        assert resp.status_code == 200
+        items = resp.json()
+        assert len(items) == 1
+        item = items[0]
+        # AlertModel fields preserved
+        assert item["alert_id"] == alert.alert_id
+        assert item["severity"] == alert.severity
+        # lifecycle present
+        assert "lifecycle" in item
+        assert item["lifecycle"]["state"] == "acknowledged"
+
+    async def test_listing_lifecycle_null_when_untouched(self, test_app, client):
+        _, _, als, *_ = test_app
+        alert = _make_alert()
+        als.add(alert)
+
+        resp = await client.get("/api/v1/alerts")
+        assert resp.status_code == 200
+        items = resp.json()
+        assert items[0]["lifecycle"] is None
+
+    async def test_enriched_includes_lifecycle(self, test_app, client):
+        _, _, als, *_ = test_app
+        alert = _make_alert()
+        als.add(alert)
+
+        await client.patch(
+            f"/api/v1/alerts/{alert.alert_id}/state",
+            json={"state": "investigating"},
+        )
+
+        resp = await client.get(f"/api/v1/alerts/{alert.alert_id}/enriched")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["lifecycle"]["state"] == "investigating"
+        # Underlying alert fields still present
+        assert body["alert"]["alert_id"] == alert.alert_id
