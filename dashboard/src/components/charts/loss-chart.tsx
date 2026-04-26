@@ -19,12 +19,12 @@ export function LossChart({ data }: LossChartProps) {
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-          <XAxis dataKey="step" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-          <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} scale="log" domain={["auto", "auto"]} allowDataOverflow />
-          <Tooltip contentStyle={{ background: "#0a0a0f", border: "1px solid #27272a", borderRadius: "6px" }} />
-          <Line type="monotone" dataKey="loss" stroke="#f59e0b" strokeWidth={2} dot={false} name="Loss" />
-          <Line type="monotone" dataKey="gradNorm" stroke="#ef4444" strokeWidth={1} dot={false} name="Grad Norm" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="step" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+          <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} scale="log" domain={["auto", "auto"]} allowDataOverflow />
+          <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
+          <Line type="monotone" dataKey="loss" stroke="var(--warn)" strokeWidth={2} dot={false} name="Loss" />
+          <Line type="monotone" dataKey="gradNorm" stroke="var(--crit)" strokeWidth={1} dot={false} name="Grad Norm" />
         </LineChart>
       </ResponsiveContainer>
     </div>

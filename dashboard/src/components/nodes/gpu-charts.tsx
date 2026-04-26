@@ -73,16 +73,22 @@ export function GpuCharts({ metrics }: GpuChartsProps) {
 // Inline sub-components
 
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { LineChart, Line } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import type { GpuMetrics } from "@/lib/types";
 import { isGpuPowerAvailable } from "@/lib/derive";
 
+const TOOLTIP_STYLE = {
+  background: "var(--popover)",
+  border: "1px solid var(--border)",
+  borderRadius: "6px",
+  color: "var(--popover-foreground)",
+} as const;
+const AXIS_TICK = { fill: "var(--muted-foreground)", fontSize: 11 } as const;
+
 function MemoryBar({ data }: { data: GpuMetrics[] }) {
-  const chartData = useMemo(() => data.slice(-20).map(d => ({
+  const chartData = useMemo(() => data.slice(-60).map(d => ({
     time: new Date(d.timestamp_ms).toLocaleTimeString(),
     used: d.fb_used_mb,
-    free: d.fb_free_mb,
   })), [data]);
 
   const latest = data[data.length - 1];
@@ -98,21 +104,19 @@ function MemoryBar({ data }: { data: GpuMetrics[] }) {
       </div>
       <div className="h-4 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-blue-500 transition-all"
+          className="h-full rounded-full bg-[var(--info)] transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
-      {/* Historical trend */}
       <div className="h-40">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-            <XAxis dataKey="time" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
-            <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-            <Tooltip contentStyle={{ background: "#0a0a0f", border: "1px solid #27272a", borderRadius: "6px" }} />
-            <Bar dataKey="used" stackId="a" fill="#3b82f6" name="Used MB" />
-            <Bar dataKey="free" stackId="a" fill="#1e1e2e" name="Free MB" />
-          </BarChart>
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="time" tick={{ ...AXIS_TICK, fontSize: 10 }} />
+            <YAxis tick={AXIS_TICK} domain={[0, total]} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
+            <Line type="monotone" dataKey="used" stroke="var(--info)" strokeWidth={2} dot={false} name="Used MB" />
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </div>
@@ -129,11 +133,11 @@ function PowerChart({ data }: { data: GpuMetrics[] }) {
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-          <XAxis dataKey="time" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-          <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-          <Tooltip contentStyle={{ background: "#0a0a0f", border: "1px solid #27272a", borderRadius: "6px" }} />
-          <Line type="monotone" dataKey="power" stroke="#f59e0b" strokeWidth={2} dot={false} name="Power (W)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="time" tick={AXIS_TICK} />
+          <YAxis tick={AXIS_TICK} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} />
+          <Line type="monotone" dataKey="power" stroke="var(--warn)" strokeWidth={2} dot={false} name="Power (W)" />
         </LineChart>
       </ResponsiveContainer>
     </div>
