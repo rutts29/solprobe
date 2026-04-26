@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { AlertModel, DiagnosisResult } from "@/lib/types";
+import type { AlertLifecycle, AlertModel, DiagnosisResult } from "@/lib/types";
 import { fetchAlerts, fetchDiagnoses } from "@/lib/api";
 
 export function useAlerts(params?: { severity?: string; node_id?: string; limit?: number }) {
@@ -33,7 +33,13 @@ export function useAlerts(params?: { severity?: string; node_id?: string; limit?
     setAlerts((prev) => [alert, ...prev]);
   }, []);
 
-  return { alerts, loading, error, refresh, prepend };
+  const updateLifecycle = useCallback((alertId: string, lifecycle: AlertLifecycle) => {
+    setAlerts((prev) =>
+      prev.map((a) => (a.alert_id === alertId ? { ...a, lifecycle } : a)),
+    );
+  }, []);
+
+  return { alerts, loading, error, refresh, prepend, updateLifecycle };
 }
 
 export function useDiagnoses(params?: { node_id?: string; root_cause?: string; limit?: number }) {

@@ -52,6 +52,23 @@ export interface DiLoCoMetrics {
   is_straggler: boolean;
 }
 
+export type AlertLifecycleState =
+  | "acknowledged"
+  | "investigating"
+  | "resolved"
+  | "ignored";
+
+export interface AlertLifecycleNote {
+  text: string;
+  author: string | null;
+  timestamp_ms: number;
+}
+
+export interface AlertLifecycle {
+  state: AlertLifecycleState | null;
+  notes: AlertLifecycleNote[];
+}
+
 export interface AlertModel {
   alert_id: string;
   node_id: string;
@@ -64,6 +81,7 @@ export interface AlertModel {
   evidence: Record<string, unknown>;
   gpu_index?: number;
   job_id?: string;
+  lifecycle?: AlertLifecycle | null;
 }
 
 export interface EvidenceItem {
@@ -117,6 +135,7 @@ export interface EnrichedAlert {
   recent_metrics: Record<string, unknown>[];
   node_history: AlertModel[];
   correlated_events: AlertModel[];
+  lifecycle?: AlertLifecycle | null;
 }
 
 export interface HealthStatus {
