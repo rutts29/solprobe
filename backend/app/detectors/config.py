@@ -30,5 +30,27 @@ class DetectionConfig(BaseSettings):
     diloco_sync_spike_factor: float = 2.0
     diloco_zscore_threshold: float = 3.0
 
+    # ── Numeric instability detector ───────────────
+    numeric_instability_fields: list[str] = ["loss", "gradient_norm", "throughput_tps", "mfu_pct"]
+
+    # ── Training stalled detector ──────────────────
+    stalled_warn_seconds: float = 60.0
+    stalled_critical_seconds: float = 300.0
+    stalled_min_samples: int = 3
+    stalled_dedup_cooldown_seconds: float = 60.0
+
+    # ── Loss plateau detector ──────────────────────
+    plateau_window_steps: int = 50
+    plateau_warmup_steps: int = 20
+    plateau_threshold: float = 1e-4
+    plateau_baseline_window_steps: int = 200
+    plateau_dedup_cooldown_seconds: float = 300.0
+
+    # ── Throughput regression detector ─────────────
+    regression_baseline_samples: int = 200
+    regression_recent_samples: int = 30
+    regression_ratio: float = 0.7
+    regression_dedup_cooldown_seconds: float = 120.0
+
 
 detection_config = DetectionConfig()
