@@ -18,13 +18,13 @@ export function TempChart({ data }: TempChartProps) {
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-          <XAxis dataKey="time" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-          <YAxis tick={{ fill: "#a1a1aa", fontSize: 11 }} domain={[20, 100]} />
-          <Tooltip contentStyle={{ background: "#0a0a0f", border: "1px solid #27272a", borderRadius: "6px" }} />
-          <ReferenceLine y={80} stroke="#f59e0b" strokeDasharray="5 5" label={{ value: "Warn", fill: "#f59e0b", fontSize: 11 }} />
-          <ReferenceLine y={85} stroke="#ef4444" strokeDasharray="5 5" label={{ value: "Crit", fill: "#ef4444", fontSize: 11 }} />
-          <Line type="monotone" dataKey="temp" stroke="#3b82f6" strokeWidth={2} dot={false} name="Temperature (°C)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="time" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+          <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} domain={[20, 100]} />
+          <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
+          <ReferenceLine y={80} stroke="var(--warn)" strokeDasharray="5 5" label={{ value: "Warn", fill: "var(--warn)", fontSize: 11 }} />
+          <ReferenceLine y={85} stroke="var(--crit)" strokeDasharray="5 5" label={{ value: "Crit", fill: "var(--crit)", fontSize: 11 }} />
+          <Line type="monotone" dataKey="temp" stroke="var(--info)" strokeWidth={2} dot={false} name="Temperature (°C)" />
         </LineChart>
       </ResponsiveContainer>
     </div>

@@ -18,12 +18,12 @@ export function ThroughputChart({ data }: ThroughputChartProps) {
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-          <XAxis dataKey="step" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-          <YAxis yAxisId="left" tick={{ fill: "#a1a1aa", fontSize: 11 }} />
-          <YAxis yAxisId="right" orientation="right" tick={{ fill: "#a1a1aa", fontSize: 11 }} domain={[0, 100]} />
-          <Tooltip contentStyle={{ background: "#0a0a0f", border: "1px solid #27272a", borderRadius: "6px" }} />
-          <Line yAxisId="left" type="monotone" dataKey="throughput" stroke="#10b981" strokeWidth={2} dot={false} name="Tokens/sec" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="step" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+          <YAxis yAxisId="left" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} domain={[0, 100]} />
+          <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
+          <Line yAxisId="left" type="monotone" dataKey="throughput" stroke="var(--ok)" strokeWidth={2} dot={false} name="Tokens/sec" />
           <Line yAxisId="right" type="monotone" dataKey="mfu" stroke="#8b5cf6" strokeWidth={2} dot={false} name="MFU %" />
         </LineChart>
       </ResponsiveContainer>
