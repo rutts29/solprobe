@@ -16,6 +16,7 @@ from app.models.metrics import (
     MetricsBatchModel,
     TrainingMetricsModel,
 )
+from app.diagnosis.store import DiagnosisStore
 from app.stores import (
     AlertStore,
     MetricsStore,
@@ -76,11 +77,13 @@ def _make_alert(
     alert_type: str = "thermal_throttle",
     ts: int | None = None,
     source: str = "EDGE",
+    job_id: str | None = None,
+    alert_id: str | None = None,
 ) -> AlertModel:
     import uuid
 
     return AlertModel(
-        alert_id=str(uuid.uuid4()),
+        alert_id=alert_id or str(uuid.uuid4()),
         node_id=node_id,
         timestamp_ms=ts or int(time.time() * 1000),
         severity=severity,
@@ -88,6 +91,7 @@ def _make_alert(
         alert_type=alert_type,
         description="Test alert",
         confidence=0.9,
+        job_id=job_id,
     )
 
 
@@ -102,6 +106,7 @@ def fresh_stores(monkeypatch: pytest.MonkeyPatch):
     als = AlertStore()
     ans = AnomalyStore()
     js = JobStore()
+    ds = DiagnosisStore()
 
     # Patch the module-level singletons everywhere they're imported
     for mod in [stores_mod, zscore_mod, cross_node_mod]:
@@ -113,13 +118,13 @@ def fresh_stores(monkeypatch: pytest.MonkeyPatch):
     # Reset z-score deduplication state between tests
     zscore_mod._last_alerted.clear()
 
-    return ms, als, ans, js
+    return ms, als, ans, js, ds
 
 
 @pytest.fixture()
 def test_app(fresh_stores):
     """Create a minimal FastAPI app for testing (no gRPC/background tasks)."""
-    ms, als, ans, js = fresh_stores
+    ms, als, ans, js, ds = fresh_stores
 
     # Patch stores used by routes and enrichment
     import app.api.routes as routes_mod
@@ -131,6 +136,7 @@ def test_app(fresh_stores):
     routes_mod.alert_store = als
     routes_mod.anomaly_store = ans
     routes_mod.job_store = js
+    routes_mod.diagnosis_store = ds
     enrichment_mod.metrics_store = ms
     enrichment_mod.alert_store = als
 
@@ -161,7 +167,7 @@ def test_app(fresh_stores):
         finally:
             await wm.disconnect(conn)
 
-    return app, ms, als, ans, js, wm
+    return app, ms, als, ans, js, wm, ds
 
 
 @pytest_asyncio.fixture()

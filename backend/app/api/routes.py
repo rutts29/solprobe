@@ -11,6 +11,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
+import time
+
 from app.diagnosis.agent import get_or_create_agent
 from app.diagnosis.models import DiagnosisRequest, DiagnosisResult
 from app.diagnosis.store import diagnosis_store
@@ -135,10 +137,11 @@ async def register_job(body: JobRegistration) -> dict:
 
     Body:
         job_id: Unique job identifier.
+        name: Optional human-readable run name.
         config: Arbitrary key-value configuration.
         node_ids: List of participating node IDs.
     """
-    job_store.register(body.job_id, body.config, body.node_ids)
+    job_store.register(body.job_id, body.config, body.node_ids, name=body.name)
     logger.info("Job registered: %s with nodes %s", body.job_id, body.node_ids)
     return {"job_id": body.job_id, "status": "registered"}
 
@@ -156,6 +159,63 @@ async def get_job(job_id: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     return job
+
+
+@router.get("/jobs/{job_id}/summary")
+async def get_job_summary(job_id: str) -> dict:
+    """Return latest training/hardware metrics, job-scoped alerts, and diagnoses.
+
+    Latest training and hardware are picked from any node listed in the job's
+    `node_ids`, by most recent timestamp. Alerts are filtered by `alert.job_id`,
+    and diagnoses are joined to those alerts via `alert_id`.
+    """
+    job = job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    latest_training = None
+    latest_hardware = None
+    latest_training_ts = -1
+    latest_hardware_ts = -1
+    for node_id in job.get("node_ids", []) or []:
+        status = metrics_store.get_node_status(node_id)
+        if status is None:
+            continue
+        if status.latest_training and status.latest_training.timestamp_ms > latest_training_ts:
+            latest_training = status.latest_training
+            latest_training_ts = status.latest_training.timestamp_ms
+        if status.latest_metrics:
+            ts = max((g.timestamp_ms for g in status.latest_metrics), default=-1)
+            if ts > latest_hardware_ts:
+                # Pick the GPU sample with max timestamp inside the latest snapshot.
+                latest_hardware = max(status.latest_metrics, key=lambda g: g.timestamp_ms)
+                latest_hardware_ts = ts
+
+    job_alerts = [a for a in alert_store.query(limit=1000) if a.job_id == job_id]
+
+    seen_diag_ids: set[str] = set()
+    diagnoses: list[DiagnosisResult] = []
+    for alert in job_alerts:
+        d = diagnosis_store.get_by_alert_id(alert.alert_id)
+        if d is not None and d.diagnosis_id not in seen_diag_ids:
+            diagnoses.append(d)
+            seen_diag_ids.add(d.diagnosis_id)
+
+    created_at = int(job.get("created_at_ms", 0))
+    if job.get("status") in ("completed", "failed"):
+        end_ms = int(job.get("updated_at_ms", created_at))
+    else:
+        end_ms = int(time.time() * 1000)
+    run_duration_ms = max(0, end_ms - created_at)
+
+    return {
+        "job": job,
+        "latest_training": latest_training.model_dump() if latest_training else None,
+        "latest_hardware": latest_hardware.model_dump() if latest_hardware else None,
+        "alerts": [a.model_dump() for a in job_alerts],
+        "diagnoses": [d.model_dump() for d in diagnoses],
+        "run_duration_ms": run_duration_ms,
+    }
 
 
 # ---------------------------------------------------------------------------
