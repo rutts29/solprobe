@@ -107,7 +107,7 @@ class DiagnosisAgent:
 
         # Check rate limit
         if not bypass_rate_limit and not self._rate_limiter.try_acquire(alert.node_id):
-            result = self._make_failed_result(
+            result = self._make_llm_unavailable_result(
                 diagnosis_id=diagnosis_id,
                 alert=alert,
                 start_ms=start_ms,
@@ -179,7 +179,7 @@ class DiagnosisAgent:
                 )
         except RateLimitError:
             logger.warning("Anthropic rate limit hit for alert %s", alert.alert_id)
-            result = self._make_failed_result(
+            result = self._make_llm_unavailable_result(
                 diagnosis_id=diagnosis_id,
                 alert=alert,
                 start_ms=start_ms,
@@ -190,7 +190,7 @@ class DiagnosisAgent:
             return result
         except APITimeoutError:
             logger.warning("Anthropic API timeout for alert %s", alert.alert_id)
-            result = self._make_failed_result(
+            result = self._make_llm_unavailable_result(
                 diagnosis_id=diagnosis_id,
                 alert=alert,
                 start_ms=start_ms,
@@ -201,7 +201,7 @@ class DiagnosisAgent:
             return result
         except APIError as exc:
             logger.exception("Anthropic API error for alert %s", alert.alert_id)
-            result = self._make_failed_result(
+            result = self._make_llm_unavailable_result(
                 diagnosis_id=diagnosis_id,
                 alert=alert,
                 start_ms=start_ms,
@@ -212,7 +212,7 @@ class DiagnosisAgent:
             return result
         except Exception as exc:
             logger.exception("Unexpected error calling LLM for alert %s", alert.alert_id)
-            result = self._make_failed_result(
+            result = self._make_llm_unavailable_result(
                 diagnosis_id=diagnosis_id,
                 alert=alert,
                 start_ms=start_ms,
@@ -324,6 +324,128 @@ class DiagnosisAgent:
             similar_incidents=[],
             llm_model=getattr(response, "model", self._model),
             latency_ms=latency_ms,
+            status="completed",
+            error=None,
+        )
+
+    def _make_llm_unavailable_result(
+        self,
+        diagnosis_id: str,
+        alert: AlertModel,
+        start_ms: int,
+        status: str,
+        error: str,
+    ) -> DiagnosisResult:
+        """Return a deterministic diagnosis for known alerts when the LLM is unavailable."""
+        fallback = self._make_local_fallback_result(
+            diagnosis_id=diagnosis_id,
+            alert=alert,
+            start_ms=start_ms,
+        )
+        if fallback is not None:
+            logger.warning(
+                "Using local diagnosis fallback for alert %s after LLM failure: %s",
+                alert.alert_id,
+                error,
+            )
+            return fallback
+        return self._make_failed_result(
+            diagnosis_id=diagnosis_id,
+            alert=alert,
+            start_ms=start_ms,
+            status=status,
+            error=error,
+        )
+
+    def _make_local_fallback_result(
+        self,
+        diagnosis_id: str,
+        alert: AlertModel,
+        start_ms: int,
+    ) -> DiagnosisResult | None:
+        """Build a rule-based diagnosis for alert types with clear recovery semantics."""
+        if alert.alert_type not in {"gradient_explosion", "loss_spike"}:
+            return None
+
+        evidence = alert.evidence or {}
+        evidence_chain: list[EvidenceItem] = []
+        if "gradient_norm" in evidence:
+            threshold = evidence.get("threshold", "configured threshold")
+            evidence_chain.append(
+                EvidenceItem(
+                    metric="gradient_norm",
+                    value=str(evidence["gradient_norm"]),
+                    context=f"exceeds critical threshold {threshold}",
+                ),
+            )
+        if "loss" in evidence:
+            evidence_chain.append(
+                EvidenceItem(
+                    metric="loss",
+                    value=str(evidence["loss"]),
+                    context="loss spike reported by the training callback",
+                ),
+            )
+        if "step" in evidence:
+            evidence_chain.append(
+                EvidenceItem(
+                    metric="step",
+                    value=str(evidence["step"]),
+                    context="training step where the instability was observed",
+                ),
+            )
+        if not evidence_chain:
+            evidence_chain.append(
+                EvidenceItem(
+                    metric="alert",
+                    value=alert.description,
+                    context="edge detector reported training instability",
+                ),
+            )
+
+        if alert.alert_type == "gradient_explosion":
+            root_cause = "gradient_instability"
+            action = RecommendedAction(
+                action="rollback_lr",
+                params={"factor": 0.1},
+                urgency="soon" if alert.severity == "WARNING" else "immediate",
+            )
+            reasoning = (
+                "The edge sidecar observed a gradient norm above the configured critical "
+                "threshold during training. That is consistent with numerical instability, "
+                "an overly aggressive learning rate, or a corrupted batch. Claude diagnosis "
+                "was unavailable, so this local fallback recommends reducing the learning "
+                "rate and inspecting the triggering batch/checkpoint before continuing."
+            )
+            confidence = 0.78
+        else:
+            root_cause = "data_corruption"
+            action = RecommendedAction(
+                action="skip_corrupted_shard",
+                params={},
+                urgency="soon",
+            )
+            reasoning = (
+                "The training callback reported a loss spike. Without an LLM response, the "
+                "local fallback treats this as a likely bad batch or corrupted data shard and "
+                "recommends skipping or inspecting the current shard before resuming."
+            )
+            confidence = 0.7
+
+        return DiagnosisResult(
+            diagnosis_id=diagnosis_id,
+            alert_id=alert.alert_id,
+            alert_type=alert.alert_type,
+            node_id=alert.node_id,
+            timestamp_ms=int(time.time() * 1000),
+            root_cause=root_cause,
+            confidence=confidence,
+            reasoning=reasoning,
+            evidence_chain=evidence_chain,
+            recommended_action=action,
+            similar_incidents=[],
+            llm_model="local-fallback",
+            latency_ms=int(time.time() * 1000) - start_ms,
             status="completed",
             error=None,
         )
