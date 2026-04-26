@@ -11,15 +11,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAlerts } from "@/hooks/use-alerts";
 import { useWebSocket } from "@/lib/websocket";
 import { useRealtime } from "@/hooks/use-realtime";
-import type { AlertModel, DiagnosisResult } from "@/lib/types";
+import type { AlertLifecycle, AlertModel, DiagnosisResult } from "@/lib/types";
 
 const SEVERITIES = ["ALL", "CRITICAL", "WARNING", "INFO"] as const;
 
+const CLOSED_LIFECYCLE_STATES = new Set(["resolved", "ignored"]);
+
+function isOpen(alert: AlertModel): boolean {
+  return !CLOSED_LIFECYCLE_STATES.has(alert.lifecycle?.state ?? "");
+}
+
 export default function AlertsPage() {
   const [severity, setSeverity] = useState<string>("ALL");
+  const [openOnly, setOpenOnly] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<AlertModel | null>(null);
   const [selectedDiagnosis, setSelectedDiagnosis] = useState<DiagnosisResult | null>(null);
-  const { alerts, loading, error, refresh, prepend } = useAlerts({ limit: 100 });
+  const { alerts, loading, error, refresh, prepend, updateLifecycle } = useAlerts({ limit: 100 });
   const ws = useWebSocket();
 
   const onAlert = useCallback(
@@ -38,9 +45,24 @@ export default function AlertsPage() {
   );
   useRealtime(ws.subscribe, { onAlert, onDiagnosis });
 
-  const filteredAlerts = useMemo(
-    () => (severity === "ALL" ? alerts : alerts.filter((a) => a.severity === severity)),
-    [alerts, severity]
+  // Timeline filter: severity + open-only.
+  // KPI summary (SeveritySummary) keeps using unfiltered `alerts` — do not
+  // apply these filters there or the 24h totals regress.
+  const filteredAlerts = useMemo(() => {
+    let next = alerts;
+    if (severity !== "ALL") next = next.filter((a) => a.severity === severity);
+    if (openOnly) next = next.filter(isOpen);
+    return next;
+  }, [alerts, severity, openOnly]);
+
+  const handleLifecycleChange = useCallback(
+    (alertId: string, lifecycle: AlertLifecycle) => {
+      updateLifecycle(alertId, lifecycle);
+      setSelectedAlert((prev) =>
+        prev && prev.alert_id === alertId ? { ...prev, lifecycle } : prev,
+      );
+    },
+    [updateLifecycle],
   );
 
   const selectAlert = useCallback((alert: AlertModel) => {
@@ -74,7 +96,7 @@ export default function AlertsPage() {
 
       <SeveritySummary alerts={alerts} />
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {SEVERITIES.map((s) => (
           <button
             key={s}
@@ -88,6 +110,17 @@ export default function AlertsPage() {
             {s}
           </button>
         ))}
+        <button
+          onClick={() => setOpenOnly((v) => !v)}
+          aria-pressed={openOnly}
+          className={`ml-auto rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            openOnly
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Open incidents
+        </button>
       </div>
 
       {loading ? (
@@ -106,6 +139,7 @@ export default function AlertsPage() {
         <AlertDetail
           alert={selectedAlert}
           initialDiagnosis={selectedDiagnosis}
+          onLifecycleChange={handleLifecycleChange}
           onClose={() => {
             setSelectedAlert(null);
             setSelectedDiagnosis(null);
