@@ -137,3 +137,24 @@ export type WebSocketMessage =
   | { type: "alert"; data: AlertModel }
   | { type: "metric_summary"; data: NodeStatus }
   | { type: "diagnosis"; data: DiagnosisResult };
+
+export type JobStatus = "registered" | "running" | "completed" | "failed";
+
+export interface JobModel {
+  job_id: string;
+  name?: string | null;
+  status?: JobStatus;
+  created_at_ms?: number;
+  updated_at_ms?: number;
+  config: Record<string, string>;
+  node_ids: string[];
+}
+
+export interface JobSummary {
+  job: JobModel;
+  latest_training: TrainingMetrics | null;
+  latest_hardware: GpuMetrics | null;
+  alerts: AlertModel[];
+  diagnoses: DiagnosisResult[];
+  run_duration_ms: number;
+}
