@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { AlertTimeline } from "@/components/alerts/alert-timeline";
 import { AlertDetail } from "@/components/alerts/alert-detail";
 import { SeveritySummary } from "@/components/alerts/severity-summary";
@@ -11,29 +11,53 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAlerts } from "@/hooks/use-alerts";
 import { useWebSocket } from "@/lib/websocket";
 import { useRealtime } from "@/hooks/use-realtime";
-import type { AlertModel } from "@/lib/types";
+import type { AlertModel, DiagnosisResult } from "@/lib/types";
 
 const SEVERITIES = ["ALL", "CRITICAL", "WARNING", "INFO"] as const;
 
 export default function AlertsPage() {
   const [severity, setSeverity] = useState<string>("ALL");
   const [selectedAlert, setSelectedAlert] = useState<AlertModel | null>(null);
-  const { alerts, loading, error, refresh, prepend } = useAlerts({
-    severity: severity === "ALL" ? undefined : severity,
-    limit: 100,
-  });
+  const [selectedDiagnosis, setSelectedDiagnosis] = useState<DiagnosisResult | null>(null);
+  const { alerts, loading, error, refresh, prepend } = useAlerts({ limit: 100 });
   const ws = useWebSocket();
 
   const onAlert = useCallback(
     (msg: { type: "alert"; data: AlertModel }) => {
-      if (severity === "ALL" || msg.data.severity === severity) prepend(msg.data);
+      prepend(msg.data);
     },
-    [prepend, severity]
+    [prepend]
   );
-  useRealtime(ws.subscribe, { onAlert });
+  const onDiagnosis = useCallback(
+    (msg: { type: "diagnosis"; data: DiagnosisResult }) => {
+      if (selectedAlert?.alert_id === msg.data.alert_id) {
+        setSelectedDiagnosis(msg.data);
+      }
+    },
+    [selectedAlert?.alert_id]
+  );
+  useRealtime(ws.subscribe, { onAlert, onDiagnosis });
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset selection on filter change
-  useEffect(() => { setSelectedAlert(null) }, [severity]);
+  const filteredAlerts = useMemo(
+    () => (severity === "ALL" ? alerts : alerts.filter((a) => a.severity === severity)),
+    [alerts, severity]
+  );
+
+  const selectAlert = useCallback((alert: AlertModel) => {
+    setSelectedAlert(alert);
+    setSelectedDiagnosis(null);
+  }, []);
+
+  const selectSeverity = useCallback((nextSeverity: string) => {
+    setSeverity(nextSeverity);
+    setSelectedAlert(null);
+    setSelectedDiagnosis(null);
+  }, []);
+
+  const handleDiagnosisCreated = useCallback((alert: AlertModel, diagnosis: DiagnosisResult) => {
+    setSelectedAlert(alert);
+    setSelectedDiagnosis(diagnosis);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -54,7 +78,7 @@ export default function AlertsPage() {
         {SEVERITIES.map((s) => (
           <button
             key={s}
-            onClick={() => setSeverity(s)}
+            onClick={() => selectSeverity(s)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               severity === s
                 ? "bg-primary text-primary-foreground"
@@ -71,11 +95,22 @@ export default function AlertsPage() {
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
         </div>
       ) : (
-        <AlertTimeline alerts={alerts} onSelectAlert={setSelectedAlert} />
+        <AlertTimeline
+          alerts={filteredAlerts}
+          onSelectAlert={selectAlert}
+          onDiagnosisCreated={handleDiagnosisCreated}
+        />
       )}
 
       {selectedAlert && (
-        <AlertDetail alert={selectedAlert} onClose={() => setSelectedAlert(null)} />
+        <AlertDetail
+          alert={selectedAlert}
+          initialDiagnosis={selectedDiagnosis}
+          onClose={() => {
+            setSelectedAlert(null);
+            setSelectedDiagnosis(null);
+          }}
+        />
       )}
     </div>
   );

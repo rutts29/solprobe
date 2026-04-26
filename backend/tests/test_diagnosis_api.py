@@ -50,10 +50,12 @@ def _make_diagnosis(
         "latency_ms": 1000,
         "status": status,
     }
-    if status != "completed":
-        kwargs["error"] = "test error"
-    else:
+    if status in ("completed", "cached"):
         kwargs["error"] = None
+    else:
+        kwargs["error"] = "test error"
+    if status == "cached":
+        kwargs["cached_from"] = "diag-source"
     return DiagnosisResult(**kwargs)
 
 
@@ -186,6 +188,27 @@ class TestDiagnosisEndpoints:
         )
         assert resp.status_code == 201
         assert resp.json()["diagnosis_id"] == "diag-new"
+
+    @pytest.mark.asyncio(loop_scope="function")
+    @patch("app.api.routes.get_or_create_agent")
+    async def test_post_diagnoses_cached_returns_201(self, mock_get_agent, diagnosis_app, diag_client):
+        """Cached diagnoses are usable results and should not surface as API failures."""
+        _, _, als, _, _, ds = diagnosis_app
+        alert = _make_alert(alert_id="alert-cached")
+        als.add(alert)
+
+        mock_agent = MagicMock()
+        mock_agent.diagnose.return_value = _make_diagnosis(
+            diagnosis_id="diag-cached", alert_id="alert-cached", status="cached",
+        )
+        mock_get_agent.return_value = mock_agent
+
+        resp = await diag_client.post(
+            "/api/v1/diagnoses",
+            json={"alert_id": "alert-cached"},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["status"] == "cached"
 
     @pytest.mark.asyncio(loop_scope="function")
     @patch("app.api.routes.get_or_create_agent")

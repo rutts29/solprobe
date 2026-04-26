@@ -13,9 +13,10 @@ import { X } from "lucide-react";
 interface AlertDetailProps {
   alert: AlertModel;
   onClose: () => void;
+  initialDiagnosis?: DiagnosisResult | null;
 }
 
-export function AlertDetail({ alert, onClose }: AlertDetailProps) {
+export function AlertDetail({ alert, onClose, initialDiagnosis = null }: AlertDetailProps) {
   const [enriched, setEnriched] = useState<EnrichedAlert | null>(null);
   const [enrichedError, setEnrichedError] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<DiagnosisResult | null>(null);
@@ -27,7 +28,7 @@ export function AlertDetail({ alert, onClose }: AlertDetailProps) {
     let cancelled = false;
     setEnriched(null);
     setEnrichedError(null);
-    setDiagnosis(null);
+    setDiagnosis(initialDiagnosis);
     setDiagnosisNotFound(false);
     setRequestError(null);
 
@@ -39,7 +40,7 @@ export function AlertDetail({ alert, onClose }: AlertDetailProps) {
         setEnrichedError(err instanceof Error ? err.message : "Failed to load enriched alert");
       });
 
-    fetchAlertDiagnosis(alert.alert_id)
+    if (!initialDiagnosis) fetchAlertDiagnosis(alert.alert_id)
       .then((data) => { if (!cancelled) setDiagnosis(data); })
       .catch((err) => {
         if (cancelled) return;
@@ -51,7 +52,7 @@ export function AlertDetail({ alert, onClose }: AlertDetailProps) {
       });
 
     return () => { cancelled = true; };
-  }, [alert.alert_id]);
+  }, [alert.alert_id, initialDiagnosis]);
 
   async function handleRequestDiagnosis() {
     setRequesting(true);

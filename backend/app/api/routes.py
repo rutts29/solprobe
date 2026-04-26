@@ -198,7 +198,7 @@ async def create_diagnosis(body: DiagnosisRequest) -> Response:
     agent = get_or_create_agent()
     result = await asyncio.to_thread(agent.diagnose, target, True)
 
-    status_code = 201 if result.status == "completed" else 502
+    status_code = 201 if result.status in ("completed", "cached") else 502
     return Response(
         content=result.model_dump_json(),
         status_code=status_code,

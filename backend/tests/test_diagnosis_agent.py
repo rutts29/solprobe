@@ -228,6 +228,40 @@ class TestDiagnosisAgent:
 
     @patch("app.diagnosis.agent.enrich_alert")
     @patch("app.diagnosis.agent.anthropic")
+    def test_straggler_llm_error_uses_local_fallback(self, mock_anthropic_mod, mock_enrich):
+        """Throughput straggler alerts still get a useful diagnosis if the LLM call fails."""
+        from app.models.alerts import EnrichedAlert
+
+        alert = _make_alert(alert_type="straggler_detected", severity="WARNING")
+        alert.description = "Z-score anomaly on throughput_tps: z=-3.75"
+        alert.evidence = {
+            "detector": "zscore",
+            "field": "throughput_tps",
+            "window_minutes": "5",
+            "z_score": "-3.7528",
+        }
+        enriched = EnrichedAlert(alert=alert, recent_metrics=[], node_history=[], correlated_events=[])
+        mock_enrich.return_value = enriched
+
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = TypeError("SDK request construction failed")
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+
+        store = DiagnosisStore()
+        rate_limiter = DiagnosisRateLimiter()
+
+        agent = DiagnosisAgent(api_key="test-key", store=store, rate_limiter=rate_limiter)
+        result = agent.diagnose(alert, bypass_rate_limit=True)
+
+        assert result.status == "completed"
+        assert result.root_cause == "throughput_regression"
+        assert result.recommended_action.action == "inspect_node_throughput"
+        assert result.recommended_action.urgency == "soon"
+        assert result.error is None
+        assert result.llm_model == "local-fallback"
+
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
     def test_gradient_explosion_rate_limit_uses_local_fallback(self, mock_anthropic_mod, mock_enrich):
         """Rate limiting paid LLM calls should not hide obvious local training diagnoses."""
         from app.models.alerts import EnrichedAlert
