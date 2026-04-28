@@ -177,3 +177,14 @@ export interface JobSummary {
   diagnoses: DiagnosisResult[];
   run_duration_ms: number;
 }
+
+export interface CustomMetric {
+  node_id: string;
+  job_id: string;
+  timestamp_ms: number;
+  step?: number | null;
+  name: string;
+  value: number;
+  unit?: string | null;
+  tags: Record<string, string>;
+}

@@ -25,7 +25,7 @@ class TestWebSocketConnection:
     async def test_filter_subscription(self, test_app):
         from starlette.testclient import TestClient
 
-        app, ms, als, ans, js, _ds, _lcs, wm = test_app
+        app, ms, als, ans, js, _ds, _lcs, wm, *_ = test_app
 
         sync_client = TestClient(app)
         with sync_client.websocket_connect("/ws/stream") as ws:
@@ -40,7 +40,7 @@ class TestWebSocketConnection:
     async def test_multiple_connections(self, test_app):
         from starlette.testclient import TestClient
 
-        app, _, _, _, _, _, _, wm = test_app
+        app, _, _, _, _, _, _, wm, *_ = test_app
 
         sync_client = TestClient(app)
         with sync_client.websocket_connect("/ws/stream") as ws1:

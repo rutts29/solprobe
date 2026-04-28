@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { RunPanel } from "@/components/training/run-panel";
+import { CustomMetricsCard } from "@/components/training/custom-metrics-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveJob, useJobSummary } from "@/hooks/use-job-summary";
+import { useCustomMetrics } from "@/hooks/use-custom-metrics";
 import type { JobStatus } from "@/lib/types";
 
 const DEMO_COMMAND = "bash scripts/demo_nanochat_solprobe.sh";
@@ -31,6 +33,7 @@ function fmtDuration(ms: number): string {
 export default function TrainingPage() {
   const { job, loading: jobLoading } = useActiveJob();
   const { summary, loading: summaryLoading } = useJobSummary(job?.job_id ?? null);
+  const { metrics: customMetrics } = useCustomMetrics(job?.job_id ?? null);
 
   const training = summary?.latest_training ?? null;
   const hardware = summary?.latest_hardware ?? null;
@@ -117,6 +120,8 @@ export default function TrainingPage() {
       )}
 
       <RunPanel training={training} diloco={null} history={history} />
+
+      <CustomMetricsCard jobId={job.job_id} metrics={customMetrics} />
 
       {hardware && (
         <Card>
