@@ -155,6 +155,32 @@ class TestJobsEndpoint:
         assert resp.status_code == 200
         assert resp.json()["job_id"] == "job-1"
 
+    async def test_patch_job_status(self, test_app, client):
+        _, _, _, _, js, *_ = test_app
+        js.register("job-1", {"model": "llama"}, ["node-1"])
+
+        resp = await client.patch("/api/v1/jobs/job-1/status", json={"status": "running"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["job_id"] == "job-1"
+        assert body["status"] == "running"
+        assert js.get("job-1")["status"] == "running"
+
+    async def test_patch_job_status_rejects_invalid_status(self, test_app, client):
+        _, _, _, _, js, *_ = test_app
+        js.register("job-1", {"model": "llama"}, ["node-1"])
+
+        resp = await client.patch("/api/v1/jobs/job-1/status", json={"status": "paused"})
+
+        assert resp.status_code == 400
+        assert js.get("job-1")["status"] == "registered"
+
+    async def test_patch_job_status_404(self, client):
+        resp = await client.patch("/api/v1/jobs/missing/status", json={"status": "running"})
+
+        assert resp.status_code == 404
+
     async def test_get_job_404(self, client):
         resp = await client.get("/api/v1/jobs/nonexistent")
         assert resp.status_code == 404

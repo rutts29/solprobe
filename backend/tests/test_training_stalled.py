@@ -9,7 +9,7 @@ from app.detectors import training_stalled as ts_mod
 from app.detectors.training_stalled import run_training_stalled_detection
 from app.models.metrics import MetricsBatchModel
 
-from tests.conftest import _make_training_metric
+from tests.conftest import _make_gpu_metric, _make_training_metric
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +82,60 @@ class TestTrainingStalledDetector:
         assert float(alert.evidence["stalled_seconds"]) >= 60.0
         assert als.count == 1
 
+    def test_missing_fresh_training_sample_warns_when_node_still_alive(self, fresh_stores, monkeypatch):
+        ms, als, _, js, *_ = fresh_stores
+        ts_mod._last_alerted.clear()
+        monkeypatch.setattr(ts_mod, "_WARN_SECONDS", 60.0)
+        monkeypatch.setattr(ts_mod, "_CRITICAL_SECONDS", 300.0)
+        monkeypatch.setattr(ts_mod, "_NODE_FRESH_SECONDS", 30.0)
+        now_ms = 1_000_000_120_000
+        monkeypatch.setattr(ts_mod.time, "time", lambda: now_ms / 1000)
+        _register_running(js, "job-1")
+        ms.ingest_batch(
+            MetricsBatchModel(
+                training=_make_training_metric("node-1", step=42, ts=now_ms - 70_000)
+            )
+        )
+        ms.ingest_batch(
+            MetricsBatchModel(
+                gpu=[_make_gpu_metric("node-1", ts=now_ms - 1_000)]
+            )
+        )
+
+        findings = run_training_stalled_detection()
+
+        assert len(findings) == 1
+        alert = findings[0].alert
+        assert alert.alert_type == "training_stalled"
+        assert alert.severity == "WARNING"
+        assert alert.evidence["stalled_mode"] == "no_fresh_training_sample"
+        assert float(alert.evidence["stalled_seconds"]) >= 60.0
+        assert als.count == 1
+
+    def test_missing_fresh_training_sample_skips_when_node_stale(self, fresh_stores, monkeypatch):
+        ms, als, _, js, *_ = fresh_stores
+        ts_mod._last_alerted.clear()
+        monkeypatch.setattr(ts_mod, "_WARN_SECONDS", 60.0)
+        monkeypatch.setattr(ts_mod, "_NODE_FRESH_SECONDS", 30.0)
+        now_ms = 1_000_000_120_000
+        monkeypatch.setattr(ts_mod.time, "time", lambda: now_ms / 1000)
+        _register_running(js, "job-1")
+        ms.ingest_batch(
+            MetricsBatchModel(
+                training=_make_training_metric("node-1", step=42, ts=now_ms - 70_000)
+            )
+        )
+        ms.ingest_batch(
+            MetricsBatchModel(
+                gpu=[_make_gpu_metric("node-1", ts=now_ms - 40_000)]
+            )
+        )
+
+        findings = run_training_stalled_detection()
+
+        assert findings == []
+        assert als.count == 0
+
     def test_stalled_critical_after_critical_threshold(self, fresh_stores, monkeypatch):
         ms, als, _, js, *_ = fresh_stores
         ts_mod._last_alerted.clear()
@@ -121,9 +175,9 @@ class TestTrainingStalledDetector:
         ms, _, _, js, *_ = fresh_stores
         ts_mod._last_alerted.clear()
         monkeypatch.setattr(ts_mod, "_WARN_SECONDS", 60.0)
-        # Register job but leave status as "registered" (not "running")
         js.register(job_id="job-1", config={}, node_ids=["node-1"])
         _ingest_steps(ms, "node-1", step=42, count=3, start_ts=1_000_000_000_000, interval_ms=32_500)
+        js.update_status("job-1", "completed")
         findings = run_training_stalled_detection()
         assert findings == []
 
