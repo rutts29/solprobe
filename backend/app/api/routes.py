@@ -21,12 +21,14 @@ from app.diagnosis.store import diagnosis_store
 from app.enrichment import enrich_alert
 from app.models.alerts import AlertModel, EnrichedAlert, JobRegistration
 from app.models.metrics import GpuMetricsModel, NodeStatus
+from app.models.policies import MonitoringPolicy, PolicyCreate, PolicyUpdate
 from app.stores import (
     alert_lifecycle_store,
     alert_store,
     anomaly_store,
     job_store,
     metrics_store,
+    policy_store,
 )
 
 logger = logging.getLogger(__name__)
@@ -367,3 +369,52 @@ async def get_alert_diagnosis(alert_id: str) -> DiagnosisResult:
     if result is None:
         raise HTTPException(status_code=404, detail=f"No diagnosis found for alert '{alert_id}'")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Policy endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/policies", response_model=list[MonitoringPolicy])
+async def list_policies() -> list[MonitoringPolicy]:
+    """Return all monitoring policies, newest first by update time."""
+    raw = policy_store.list_all()
+    raw.sort(key=lambda p: p.get("updated_at_ms", 0), reverse=True)
+    return [MonitoringPolicy(**p) for p in raw]
+
+
+@router.post("/policies", response_model=MonitoringPolicy, status_code=201)
+async def create_policy(body: PolicyCreate) -> MonitoringPolicy:
+    """Create a new monitoring policy. 409 if `policy_id` already exists."""
+    try:
+        created = policy_store.create(body.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return MonitoringPolicy(**created)
+
+
+@router.patch("/policies/{policy_id}", response_model=MonitoringPolicy)
+async def patch_policy(policy_id: str, body: PolicyUpdate) -> MonitoringPolicy:
+    """Patch a policy. Only fields supplied in the body are updated."""
+    patch = body.model_dump(exclude_unset=True)
+    updated = policy_store.update(policy_id, patch)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Policy '{policy_id}' not found")
+    return MonitoringPolicy(**updated)
+
+
+@router.delete("/policies/{policy_id}", status_code=204)
+async def delete_policy(policy_id: str) -> Response:
+    if not policy_store.delete(policy_id):
+        raise HTTPException(status_code=404, detail=f"Policy '{policy_id}' not found")
+    return Response(status_code=204)
+
+
+@router.post("/policies/{policy_id}/toggle", response_model=MonitoringPolicy)
+async def toggle_policy(policy_id: str) -> MonitoringPolicy:
+    """Flip the `enabled` flag on a policy."""
+    toggled = policy_store.toggle(policy_id)
+    if toggled is None:
+        raise HTTPException(status_code=404, detail=f"Policy '{policy_id}' not found")
+    return MonitoringPolicy(**toggled)

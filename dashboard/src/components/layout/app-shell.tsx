@@ -60,6 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           case "a": router.push("/alerts"); break;
           case "d": router.push("/diagnoses"); break;
           case "t": router.push("/training"); break;
+          case "p": router.push("/policies"); break;
           case "c": router.push("/attestations"); break;
         }
       } else {

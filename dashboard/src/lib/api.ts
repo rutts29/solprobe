@@ -9,6 +9,9 @@ import type {
   DiagnosisResult,
   JobModel,
   JobSummary,
+  MonitoringPolicy,
+  PolicyCreate,
+  PolicyUpdate,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -106,5 +109,38 @@ export function postAlertNote(
     method: "POST",
     body: JSON.stringify({ text, author: author ?? null }),
   });
+}
+
+export function fetchPolicies(): Promise<MonitoringPolicy[]> {
+  return apiFetch("/api/v1/policies");
+}
+
+export function createPolicy(body: PolicyCreate): Promise<MonitoringPolicy> {
+  return apiFetch("/api/v1/policies", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function patchPolicy(
+  policyId: string,
+  body: PolicyUpdate,
+): Promise<MonitoringPolicy> {
+  return apiFetch(`/api/v1/policies/${policyId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deletePolicy(policyId: string): Promise<void> {
+  return fetch(`${BASE_URL}/api/v1/policies/${policyId}`, {
+    method: "DELETE",
+  }).then((res) => {
+    if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
+  });
+}
+
+export function togglePolicy(policyId: string): Promise<MonitoringPolicy> {
+  return apiFetch(`/api/v1/policies/${policyId}/toggle`, { method: "POST" });
 }
 
