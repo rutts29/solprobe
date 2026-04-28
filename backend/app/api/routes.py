@@ -20,12 +20,13 @@ from app.diagnosis.models import DiagnosisRequest, DiagnosisResult
 from app.diagnosis.store import diagnosis_store
 from app.enrichment import enrich_alert
 from app.models.alerts import AlertModel, EnrichedAlert, JobRegistration
-from app.models.metrics import GpuMetricsModel, NodeStatus
+from app.models.metrics import CustomMetricModel, GpuMetricsModel, NodeStatus
 from app.models.policies import MonitoringPolicy, PolicyCreate, PolicyUpdate
 from app.stores import (
     alert_lifecycle_store,
     alert_store,
     anomaly_store,
+    custom_metrics_store,
     job_store,
     metrics_store,
     policy_store,
@@ -418,3 +419,42 @@ async def toggle_policy(policy_id: str) -> MonitoringPolicy:
     if toggled is None:
         raise HTTPException(status_code=404, detail=f"Policy '{policy_id}' not found")
     return MonitoringPolicy(**toggled)
+
+
+# ---------------------------------------------------------------------------
+# Custom-metric endpoints (Phase 4 V0)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/custom-metrics", status_code=201)
+async def post_custom_metrics(
+    body: CustomMetricModel | list[CustomMetricModel],
+) -> dict[str, int]:
+    """Ingest a single custom metric or a list of them."""
+    items = body if isinstance(body, list) else [body]
+    if not items:
+        raise HTTPException(status_code=400, detail="Empty metric list")
+    for m in items:
+        custom_metrics_store.add(m)
+    return {"accepted": len(items)}
+
+
+@router.get("/custom-metrics", response_model=list[CustomMetricModel])
+async def list_custom_metrics(
+    job_id: str | None = Query(default=None),
+    name: str | None = Query(default=None),
+    node_id: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> list[CustomMetricModel]:
+    """Return matching custom metrics newest-first."""
+    return custom_metrics_store.query(
+        name=name, job_id=job_id, node_id=node_id, limit=limit
+    )
+
+
+@router.get("/custom-metrics/names")
+async def list_custom_metric_names(
+    job_id: str | None = Query(default=None),
+) -> list[str]:
+    """Return distinct metric names known to the store."""
+    return custom_metrics_store.get_names(job_id=job_id)
