@@ -12,6 +12,7 @@ import {
   GitBranch,
   Coins,
   ChevronsUpDown,
+  ShieldCheck,
 } from "lucide-react";
 
 interface NavItem {
@@ -30,6 +31,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { href: "/alerts", label: "Alerts", icon: AlertTriangle, badgeKey: "alerts" },
       { href: "/diagnoses", label: "Diagnoses", icon: Brain },
       { href: "/training", label: "Training", icon: GitBranch },
+      { href: "/policies", label: "Policies", icon: ShieldCheck },
     ],
   },
   {

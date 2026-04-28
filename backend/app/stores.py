@@ -423,6 +423,109 @@ class AlertLifecycleStore:
         return {"state": entry["state"], "notes": [dict(n) for n in entry["notes"]]}
 
 
+class PolicyStore:
+    """In-memory store for monitoring policies and per-scope cooldowns."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._policies: dict[str, dict[str, Any]] = {}
+        # cooldown key: (policy_id, node_id_or_None, job_id_or_None) -> last_trigger_ms
+        self._cooldowns: dict[tuple[str, str | None, str | None], int] = {}
+
+    @staticmethod
+    def _now_ms() -> int:
+        return int(time.time() * 1000)
+
+    def create(self, policy: dict[str, Any]) -> dict[str, Any]:
+        policy_id = policy["policy_id"]
+        with self._lock:
+            if policy_id in self._policies:
+                raise KeyError(f"policy {policy_id!r} already exists")
+            now_ms = self._now_ms()
+            entry = dict(policy)
+            entry.setdefault("enabled", True)
+            entry["created_at_ms"] = now_ms
+            entry["updated_at_ms"] = now_ms
+            entry.setdefault("last_triggered_at_ms", None)
+            self._policies[policy_id] = entry
+            return dict(entry)
+
+    def update(self, policy_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        with self._lock:
+            entry = self._policies.get(policy_id)
+            if entry is None:
+                return None
+            for k, v in patch.items():
+                if v is None:
+                    continue
+                entry[k] = v
+            entry["updated_at_ms"] = self._now_ms()
+            return dict(entry)
+
+    def toggle(self, policy_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            entry = self._policies.get(policy_id)
+            if entry is None:
+                return None
+            entry["enabled"] = not entry.get("enabled", True)
+            entry["updated_at_ms"] = self._now_ms()
+            return dict(entry)
+
+    def delete(self, policy_id: str) -> bool:
+        with self._lock:
+            if policy_id not in self._policies:
+                return False
+            del self._policies[policy_id]
+            self._cooldowns = {
+                k: v for k, v in self._cooldowns.items() if k[0] != policy_id
+            }
+            return True
+
+    def get(self, policy_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            entry = self._policies.get(policy_id)
+            return dict(entry) if entry else None
+
+    def list_all(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(e) for e in self._policies.values()]
+
+    def list_enabled(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(e) for e in self._policies.values() if e.get("enabled", True)]
+
+    def in_cooldown(
+        self,
+        policy_id: str,
+        node_id: str | None,
+        job_id: str | None,
+        cooldown_seconds: float,
+        now_ms: int,
+    ) -> bool:
+        if cooldown_seconds <= 0:
+            return False
+        key = (policy_id, node_id, job_id)
+        with self._lock:
+            last = self._cooldowns.get(key)
+            if last is None:
+                return False
+            return (now_ms - last) < int(cooldown_seconds * 1000)
+
+    def mark_triggered(
+        self,
+        policy_id: str,
+        node_id: str | None,
+        job_id: str | None,
+        now_ms: int,
+    ) -> None:
+        key = (policy_id, node_id, job_id)
+        with self._lock:
+            self._cooldowns[key] = now_ms
+            entry = self._policies.get(policy_id)
+            if entry is not None:
+                entry["last_triggered_at_ms"] = now_ms
+
+
 # ---------------------------------------------------------------------------
 # Global singleton instances — imported by gRPC server, detectors, and routes
 # ---------------------------------------------------------------------------
@@ -431,3 +534,4 @@ alert_store = AlertStore()
 anomaly_store = AnomalyStore()
 job_store = JobStore()
 alert_lifecycle_store = AlertLifecycleStore()
+policy_store = PolicyStore()
