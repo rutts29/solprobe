@@ -33,3 +33,6 @@ backend/app/generated/*.py
 .superpowers/
 backend/.venv/
 .worktrees/
+
+# Demo run logs
+.runs/

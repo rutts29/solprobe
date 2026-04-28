@@ -13,10 +13,11 @@ from app.models.metrics import (
 )
 
 
-# Phase 4 (eve) will add "custom" to this set; the evaluator looks up
-# readers via a registry so adding a new source there doesn't require
-# changes here beyond extending the Literal.
-PolicySource = Literal["gpu", "training", "diloco"]
+# `custom` is the user-defined-metric source: `field` carries the custom
+# metric name (e.g. "eval_bpb") rather than a model attribute. Field
+# validation is skipped for `custom` because names are user-defined and
+# unbounded — see `_check_field_known` below.
+PolicySource = Literal["gpu", "training", "diloco", "custom"]
 PolicyOperator = Literal["gt", "gte", "lt", "lte", "abs_gt", "stale_for"]
 PolicySeverity = Literal["INFO", "WARNING", "CRITICAL"]
 
@@ -86,6 +87,11 @@ class MonitoringPolicy(BaseModel):
     def _check_field_known(cls, v: PolicyMetric) -> PolicyMetric:
         valid = _SOURCE_FIELDS.get(v.source)
         if valid is None:
+            # Source has no field whitelist (e.g. "custom"). Names are
+            # user-defined, but require non-empty so the evaluator
+            # doesn't silently no-op on a blank query.
+            if not v.field.strip():
+                raise ValueError(f"field is required for source {v.source!r}")
             return v
         if v.field not in valid:
             raise ValueError(
