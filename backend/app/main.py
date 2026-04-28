@@ -27,6 +27,7 @@ from app.detectors.cross_node import run_cross_node_detection
 from app.detectors.diloco import run_diloco_detection
 from app.detectors.loss_plateau import run_loss_plateau_detection
 from app.detectors.numeric_instability import run_numeric_instability_detection
+from app.detectors.policy_evaluator import run_policy_evaluation
 from app.detectors.throughput_regression import run_throughput_regression_detection
 from app.detectors.training_stalled import run_training_stalled_detection
 from app.detectors.zscore import run_zscore_detection
@@ -163,6 +164,13 @@ async def _throughput_regression_loop() -> None:
     )
 
 
+async def _policy_evaluator_loop() -> None:
+    await _detector_loop(
+        "policy-evaluator", 5, run_policy_evaluation,
+        broadcast_fn=ws_manager.broadcast_alert,
+    )
+
+
 async def _prom_gauge_loop() -> None:
     """Update Prometheus gauges every 5 seconds."""
     consecutive_failures = 0
@@ -245,6 +253,7 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     _background_tasks.append(asyncio.create_task(_training_stalled_loop()))
     _background_tasks.append(asyncio.create_task(_loss_plateau_loop()))
     _background_tasks.append(asyncio.create_task(_throughput_regression_loop()))
+    _background_tasks.append(asyncio.create_task(_policy_evaluator_loop()))
     _background_tasks.append(asyncio.create_task(metric_summary_loop()))
     _background_tasks.append(asyncio.create_task(_prom_gauge_loop()))
     _background_tasks.append(asyncio.create_task(_auto_diagnosis_loop()))
