@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from app.models.metrics import MetricsBatchModel
-from app.stores import AlertStore, JobStore, MetricsStore
+from app.stores import AlertLifecycleStore, AlertStore, JobStore, MetricsStore
 
 from tests.conftest import _make_alert, _make_gpu_metric, _make_training_metric
 
@@ -291,3 +293,76 @@ class TestJobStore:
         assert job["created_at_ms"] == first_created
         assert job["updated_at_ms"] > first_created
         assert job["name"] == "rename"
+
+
+class TestAlertLifecycleStore:
+    def test_get_unknown_alert_returns_none(self):
+        store = AlertLifecycleStore()
+        assert store.get("missing") is None
+
+    def test_set_state_creates_entry(self):
+        store = AlertLifecycleStore()
+        result = store.set_state("alert-1", "acknowledged")
+        assert result["state"] == "acknowledged"
+        assert result["notes"] == []
+
+        fetched = store.get("alert-1")
+        assert fetched is not None
+        assert fetched["state"] == "acknowledged"
+
+    def test_set_state_rejects_invalid(self):
+        store = AlertLifecycleStore()
+        with pytest.raises(ValueError):
+            store.set_state("alert-1", "bogus")
+
+    def test_set_state_idempotent(self):
+        store = AlertLifecycleStore()
+        store.set_state("alert-1", "investigating")
+        store.set_state("alert-1", "investigating")
+        entry = store.get("alert-1")
+        assert entry["state"] == "investigating"
+
+    def test_set_state_can_change(self):
+        store = AlertLifecycleStore()
+        store.set_state("alert-1", "acknowledged")
+        store.set_state("alert-1", "resolved")
+        assert store.get("alert-1")["state"] == "resolved"
+
+    def test_add_note_creates_entry(self):
+        store = AlertLifecycleStore()
+        result = store.add_note("alert-1", "checked logs", author="cara")
+        assert result["state"] is None
+        assert len(result["notes"]) == 1
+        note = result["notes"][0]
+        assert note["text"] == "checked logs"
+        assert note["author"] == "cara"
+        assert isinstance(note["timestamp_ms"], int)
+
+    def test_add_note_appends(self):
+        store = AlertLifecycleStore()
+        store.add_note("alert-1", "first")
+        store.add_note("alert-1", "second", author="anna")
+        entry = store.get("alert-1")
+        assert [n["text"] for n in entry["notes"]] == ["first", "second"]
+        assert entry["notes"][0]["author"] is None
+        assert entry["notes"][1]["author"] == "anna"
+
+    def test_open_alert_ids_excludes_resolved_and_ignored(self):
+        store = AlertLifecycleStore()
+        store.set_state("alert-acked", "acknowledged")
+        store.set_state("alert-investigating", "investigating")
+        store.set_state("alert-resolved", "resolved")
+        store.set_state("alert-ignored", "ignored")
+        # alert-untouched has no entry; treated as open by callers
+        open_ids = store.get_open_alert_ids()
+        assert "alert-acked" in open_ids
+        assert "alert-investigating" in open_ids
+        assert "alert-resolved" not in open_ids
+        assert "alert-ignored" not in open_ids
+        assert "alert-untouched" not in open_ids  # store has no entry for it
+
+    def test_get_open_alert_ids_returns_set(self):
+        store = AlertLifecycleStore()
+        store.set_state("a", "acknowledged")
+        result = store.get_open_alert_ids()
+        assert isinstance(result, set)

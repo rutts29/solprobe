@@ -18,10 +18,12 @@ from app.models.metrics import (
 )
 from app.diagnosis.store import DiagnosisStore
 from app.stores import (
+    AlertLifecycleStore,
     AlertStore,
     MetricsStore,
     AnomalyStore,
     JobStore,
+    alert_lifecycle_store,
     alert_store,
     anomaly_store,
     job_store,
@@ -107,6 +109,7 @@ def fresh_stores(monkeypatch: pytest.MonkeyPatch):
     ans = AnomalyStore()
     js = JobStore()
     ds = DiagnosisStore()
+    lcs = AlertLifecycleStore()
 
     # Patch the module-level singletons everywhere they're imported
     for mod in [stores_mod, zscore_mod, cross_node_mod]:
@@ -118,13 +121,13 @@ def fresh_stores(monkeypatch: pytest.MonkeyPatch):
     # Reset z-score deduplication state between tests
     zscore_mod._last_alerted.clear()
 
-    return ms, als, ans, js, ds
+    return ms, als, ans, js, ds, lcs
 
 
 @pytest.fixture()
 def test_app(fresh_stores):
     """Create a minimal FastAPI app for testing (no gRPC/background tasks)."""
-    ms, als, ans, js, ds = fresh_stores
+    ms, als, ans, js, ds, lcs = fresh_stores
 
     # Patch stores used by routes and enrichment
     import app.api.routes as routes_mod
@@ -137,6 +140,7 @@ def test_app(fresh_stores):
     routes_mod.anomaly_store = ans
     routes_mod.job_store = js
     routes_mod.diagnosis_store = ds
+    routes_mod.alert_lifecycle_store = lcs
     enrichment_mod.metrics_store = ms
     enrichment_mod.alert_store = als
 
@@ -167,7 +171,7 @@ def test_app(fresh_stores):
         finally:
             await wm.disconnect(conn)
 
-    return app, ms, als, ans, js, wm, ds
+    return app, ms, als, ans, js, ds, lcs, wm
 
 
 @pytest_asyncio.fixture()

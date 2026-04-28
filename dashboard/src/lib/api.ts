@@ -3,6 +3,8 @@ import type {
   NodeStatus,
   NodeMetricsHistory,
   AlertModel,
+  AlertLifecycle,
+  AlertLifecycleState,
   EnrichedAlert,
   DiagnosisResult,
   JobModel,
@@ -83,5 +85,26 @@ export function fetchJobs(): Promise<JobModel[]> {
 
 export function fetchJobSummary(jobId: string): Promise<JobSummary> {
   return apiFetch(`/api/v1/jobs/${jobId}/summary`);
+}
+
+export function patchAlertState(
+  alertId: string,
+  state: AlertLifecycleState,
+): Promise<AlertLifecycle> {
+  return apiFetch(`/api/v1/alerts/${alertId}/state`, {
+    method: "PATCH",
+    body: JSON.stringify({ state }),
+  });
+}
+
+export function postAlertNote(
+  alertId: string,
+  text: string,
+  author?: string | null,
+): Promise<AlertLifecycle> {
+  return apiFetch(`/api/v1/alerts/${alertId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ text, author: author ?? null }),
+  });
 }
 
