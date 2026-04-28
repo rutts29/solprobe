@@ -352,6 +352,77 @@ class JobStore:
             return list(self._jobs.values())
 
 
+_VALID_LIFECYCLE_STATES: frozenset[str] = frozenset(
+    {"acknowledged", "investigating", "resolved", "ignored"}
+)
+_CLOSED_LIFECYCLE_STATES: frozenset[str] = frozenset({"resolved", "ignored"})
+
+
+class AlertLifecycleStore:
+    """Per-alert lifecycle state and notes, parallel to AlertStore.
+
+    Alerts without an entry are treated as open. Only `resolved` and `ignored`
+    count as closed.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._entries: dict[str, dict[str, Any]] = {}
+
+    @staticmethod
+    def _new_entry() -> dict[str, Any]:
+        return {"state": None, "notes": []}
+
+    def set_state(self, alert_id: str, state: str) -> dict[str, Any]:
+        if state not in _VALID_LIFECYCLE_STATES:
+            raise ValueError(
+                f"invalid lifecycle state: {state!r} "
+                f"(expected one of {sorted(_VALID_LIFECYCLE_STATES)})"
+            )
+        with self._lock:
+            entry = self._entries.get(alert_id)
+            if entry is None:
+                entry = self._new_entry()
+                self._entries[alert_id] = entry
+            entry["state"] = state
+            return self._snapshot(entry)
+
+    def add_note(
+        self, alert_id: str, text: str, author: str | None = None
+    ) -> dict[str, Any]:
+        note = {
+            "text": text,
+            "author": author,
+            "timestamp_ms": int(time.time() * 1000),
+        }
+        with self._lock:
+            entry = self._entries.get(alert_id)
+            if entry is None:
+                entry = self._new_entry()
+                self._entries[alert_id] = entry
+            entry["notes"].append(note)
+            return self._snapshot(entry)
+
+    def get(self, alert_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            entry = self._entries.get(alert_id)
+            if entry is None:
+                return None
+            return self._snapshot(entry)
+
+    def get_open_alert_ids(self) -> set[str]:
+        with self._lock:
+            return {
+                alert_id
+                for alert_id, entry in self._entries.items()
+                if entry["state"] not in _CLOSED_LIFECYCLE_STATES
+            }
+
+    @staticmethod
+    def _snapshot(entry: dict[str, Any]) -> dict[str, Any]:
+        return {"state": entry["state"], "notes": [dict(n) for n in entry["notes"]]}
+
+
 # ---------------------------------------------------------------------------
 # Global singleton instances — imported by gRPC server, detectors, and routes
 # ---------------------------------------------------------------------------
@@ -359,3 +430,4 @@ metrics_store = MetricsStore()
 alert_store = AlertStore()
 anomaly_store = AnomalyStore()
 job_store = JobStore()
+alert_lifecycle_store = AlertLifecycleStore()

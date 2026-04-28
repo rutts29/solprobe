@@ -4,8 +4,14 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "./severity-badge";
+import { LifecycleActions } from "./lifecycle-actions";
 import { Badge } from "@/components/ui/badge";
-import type { AlertModel, EnrichedAlert, DiagnosisResult } from "@/lib/types";
+import type {
+  AlertLifecycle,
+  AlertModel,
+  EnrichedAlert,
+  DiagnosisResult,
+} from "@/lib/types";
 import { fetchEnrichedAlert, fetchAlertDiagnosis, requestDiagnosis } from "@/lib/api";
 import { formatTimestamp } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -14,15 +20,17 @@ interface AlertDetailProps {
   alert: AlertModel;
   onClose: () => void;
   initialDiagnosis?: DiagnosisResult | null;
+  onLifecycleChange?: (alertId: string, lifecycle: AlertLifecycle) => void;
 }
 
-export function AlertDetail({ alert, onClose, initialDiagnosis = null }: AlertDetailProps) {
+export function AlertDetail({ alert, onClose, initialDiagnosis = null, onLifecycleChange }: AlertDetailProps) {
   const [enriched, setEnriched] = useState<EnrichedAlert | null>(null);
   const [enrichedError, setEnrichedError] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<DiagnosisResult | null>(null);
   const [diagnosisNotFound, setDiagnosisNotFound] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [lifecycle, setLifecycle] = useState<AlertLifecycle | null>(alert.lifecycle ?? null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,9 +39,14 @@ export function AlertDetail({ alert, onClose, initialDiagnosis = null }: AlertDe
     setDiagnosis(initialDiagnosis);
     setDiagnosisNotFound(false);
     setRequestError(null);
+    setLifecycle(alert.lifecycle ?? null);
 
     fetchEnrichedAlert(alert.alert_id)
-      .then((data) => { if (!cancelled) setEnriched(data); })
+      .then((data) => {
+        if (cancelled) return;
+        setEnriched(data);
+        if (data.lifecycle !== undefined) setLifecycle(data.lifecycle);
+      })
       .catch((err) => {
         if (cancelled) return;
         if (err instanceof Error && err.message.includes("404")) return;
@@ -52,7 +65,7 @@ export function AlertDetail({ alert, onClose, initialDiagnosis = null }: AlertDe
       });
 
     return () => { cancelled = true; };
-  }, [alert.alert_id, initialDiagnosis]);
+  }, [alert.alert_id, alert.lifecycle, initialDiagnosis]);
 
   async function handleRequestDiagnosis() {
     setRequesting(true);
@@ -87,6 +100,15 @@ export function AlertDetail({ alert, onClose, initialDiagnosis = null }: AlertDe
         <h3 className="text-lg font-medium">{alert.alert_type}</h3>
         <p className="text-sm text-muted-foreground">{alert.description}</p>
         <p className="text-xs text-muted-foreground">{formatTimestamp(alert.timestamp_ms)}</p>
+
+        <LifecycleActions
+          alertId={alert.alert_id}
+          lifecycle={lifecycle}
+          onChange={(next) => {
+            setLifecycle(next);
+            onLifecycleChange?.(alert.alert_id, next);
+          }}
+        />
 
         {/* Evidence */}
         {alert.evidence && Object.keys(alert.evidence).length > 0 && (
