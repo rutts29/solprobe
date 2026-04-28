@@ -138,7 +138,7 @@ class TestJobsEndpoint:
         assert data["status"] == "registered"
 
     async def test_list_jobs(self, test_app, client):
-        _, _, _, _, js, _ = test_app
+        _, _, _, _, js, *_ = test_app
         js.register("job-1", {"model": "llama"}, ["node-1"])
 
         resp = await client.get("/api/v1/jobs")
@@ -148,7 +148,7 @@ class TestJobsEndpoint:
         assert jobs[0]["job_id"] == "job-1"
 
     async def test_get_job(self, test_app, client):
-        _, _, _, _, js, _ = test_app
+        _, _, _, _, js, *_ = test_app
         js.register("job-1", {"model": "llama"}, ["node-1"])
 
         resp = await client.get("/api/v1/jobs/job-1")
@@ -158,3 +158,111 @@ class TestJobsEndpoint:
     async def test_get_job_404(self, client):
         resp = await client.get("/api/v1/jobs/nonexistent")
         assert resp.status_code == 404
+
+    async def test_create_job_with_name(self, client):
+        resp = await client.post(
+            "/api/v1/jobs",
+            json={
+                "job_id": "job-named",
+                "name": "Nanochat MPS",
+                "config": {"model": "nanochat"},
+                "node_ids": ["node-0"],
+            },
+        )
+        assert resp.status_code == 201
+        # Follow up with a GET to verify name is stored.
+        resp = await client.get("/api/v1/jobs/job-named")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["name"] == "Nanochat MPS"
+        assert body["status"] == "registered"
+
+
+class TestJobSummaryEndpoint:
+    async def test_summary_404_for_unknown_job(self, client):
+        resp = await client.get("/api/v1/jobs/nonexistent/summary")
+        assert resp.status_code == 404
+
+    async def test_summary_returns_job_metrics_alerts_diagnoses(self, test_app, client):
+        from app.diagnosis.models import (
+            DiagnosisResult,
+            EvidenceItem,
+            RecommendedAction,
+        )
+
+        _, ms, als, _, js, _, ds = test_app
+
+        # Register job in 'running' state.
+        js.register("job-A", {"model": "llama"}, ["node-0"], name="Run A")
+        js.update_status("job-A", "running")
+
+        # Hardware + training metrics for node-0.
+        ms.ingest_batch(
+            MetricsBatchModel(
+                gpu=[_make_gpu_metric("node-0", ts=2_000)],
+                training=_make_training_metric("node-0", ts=2_000, step=5),
+            )
+        )
+
+        # Two alerts: one for job-A, one for an unrelated job.
+        a1 = _make_alert(node_id="node-0", job_id="job-A", alert_id="alert-A1")
+        a2 = _make_alert(node_id="node-0", job_id="job-OTHER", alert_id="alert-OTHER")
+        als.add(a1)
+        als.add(a2)
+
+        # Diagnosis attached to a1 only.
+        ds.add(
+            DiagnosisResult(
+                diagnosis_id="diag-1",
+                alert_id="alert-A1",
+                alert_type="thermal_throttle",
+                node_id="node-0",
+                timestamp_ms=2_500,
+                root_cause="thermal",
+                confidence=0.9,
+                reasoning="hot",
+                evidence_chain=[EvidenceItem(metric="t", value="90", context="c")],
+                recommended_action=RecommendedAction(action="cool", params={}, urgency="soon"),
+                similar_incidents=[],
+                llm_model="claude",
+                latency_ms=10,
+                status="completed",
+            )
+        )
+
+        resp = await client.get("/api/v1/jobs/job-A/summary")
+        assert resp.status_code == 200
+        body = resp.json()
+
+        assert body["job"]["job_id"] == "job-A"
+        assert body["job"]["name"] == "Run A"
+        assert body["job"]["status"] == "running"
+        assert body["latest_training"] is not None
+        assert body["latest_training"]["step"] == 5
+        assert body["latest_hardware"] is not None
+        assert body["latest_hardware"]["node_id"] == "node-0"
+
+        alert_ids = {a["alert_id"] for a in body["alerts"]}
+        assert alert_ids == {"alert-A1"}
+
+        diag_alert_ids = {d["alert_id"] for d in body["diagnoses"]}
+        assert diag_alert_ids == {"alert-A1"}
+
+        assert body["run_duration_ms"] >= 0
+
+    async def test_summary_run_duration_uses_updated_at_when_completed(self, test_app, client):
+        _, _, _, _, js, _, _ = test_app
+
+        js.register("job-done", {}, ["node-0"], name="Done")
+        # Force timestamps for deterministic duration.
+        with js._lock:
+            entry = js._jobs["job-done"]
+            entry["created_at_ms"] = 1_000
+            entry["updated_at_ms"] = 6_500
+            entry["status"] = "completed"
+
+        resp = await client.get("/api/v1/jobs/job-done/summary")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["job"]["status"] == "completed"
+        assert body["run_duration_ms"] == 5_500

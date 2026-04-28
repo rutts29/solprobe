@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections import OrderedDict, deque
 from typing import Any
 
@@ -277,6 +278,8 @@ class AnomalyStore:
 
 _MAX_JOBS = 1000
 
+_JOB_STATUSES = ("registered", "running", "completed", "failed")
+
 
 class JobStore:
     """Bounded in-memory registry for training jobs (evicts oldest when full)."""
@@ -286,18 +289,59 @@ class JobStore:
         self._jobs: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._max_size = max_size
 
-    def register(self, job_id: str, config: dict[str, str], node_ids: list[str]) -> None:
+    @staticmethod
+    def _now_ms() -> int:
+        return int(time.time() * 1000)
+
+    def register(
+        self,
+        job_id: str,
+        config: dict[str, str],
+        node_ids: list[str],
+        name: str | None = None,
+    ) -> None:
         with self._lock:
-            if job_id in self._jobs:
+            now_ms = self._now_ms()
+            existing = self._jobs.get(job_id)
+            if existing is not None:
+                # Re-registration: preserve created_at, refresh updated_at and merge fields.
                 self._jobs.move_to_end(job_id)
+                existing["config"] = config
+                existing["node_ids"] = node_ids
+                if name is not None:
+                    existing["name"] = name
+                existing["updated_at_ms"] = now_ms
+                return
+
             self._jobs[job_id] = {
                 "job_id": job_id,
+                "name": name,
+                "status": "registered",
                 "config": config,
                 "node_ids": node_ids,
+                "created_at_ms": now_ms,
+                "updated_at_ms": now_ms,
             }
             while len(self._jobs) > self._max_size:
                 evicted_id, _ = self._jobs.popitem(last=False)
                 logger.warning("JobStore evicting oldest job (at capacity %d): job_id=%s", self._max_size, evicted_id)
+
+    def update_status(self, job_id: str, status: str) -> None:
+        if status not in _JOB_STATUSES:
+            raise ValueError(f"invalid job status: {status!r}")
+        with self._lock:
+            entry = self._jobs.get(job_id)
+            if entry is None:
+                return
+            entry["status"] = status
+            entry["updated_at_ms"] = self._now_ms()
+
+    def touch(self, job_id: str) -> None:
+        with self._lock:
+            entry = self._jobs.get(job_id)
+            if entry is None:
+                return
+            entry["updated_at_ms"] = self._now_ms()
 
     def get(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:

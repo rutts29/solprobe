@@ -52,5 +52,6 @@ class JobRegistration(BaseModel):
     """Registration payload for a training job."""
 
     job_id: str
+    name: str | None = None
     config: dict[str, str] = Field(default_factory=dict)
     node_ids: list[str] = Field(default_factory=list)
