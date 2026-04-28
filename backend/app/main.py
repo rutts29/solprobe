@@ -25,6 +25,10 @@ from fastapi.responses import Response
 from app.api.routes import router as api_router
 from app.detectors.cross_node import run_cross_node_detection
 from app.detectors.diloco import run_diloco_detection
+from app.detectors.loss_plateau import run_loss_plateau_detection
+from app.detectors.numeric_instability import run_numeric_instability_detection
+from app.detectors.throughput_regression import run_throughput_regression_detection
+from app.detectors.training_stalled import run_training_stalled_detection
 from app.detectors.zscore import run_zscore_detection
 from app.diagnosis.agent import get_or_create_agent
 from app.diagnosis.store import diagnosis_store
@@ -131,6 +135,34 @@ async def _diloco_loop() -> None:
     await _detector_loop("DiLoCo", 15, run_diloco_detection, broadcast_fn=ws_manager.broadcast_alert)
 
 
+async def _numeric_instability_loop() -> None:
+    await _detector_loop(
+        "numeric-instability", 5, run_numeric_instability_detection,
+        broadcast_fn=ws_manager.broadcast_alert,
+    )
+
+
+async def _training_stalled_loop() -> None:
+    await _detector_loop(
+        "training-stalled", 15, run_training_stalled_detection,
+        broadcast_fn=ws_manager.broadcast_alert,
+    )
+
+
+async def _loss_plateau_loop() -> None:
+    await _detector_loop(
+        "loss-plateau", 30, run_loss_plateau_detection,
+        broadcast_fn=ws_manager.broadcast_alert,
+    )
+
+
+async def _throughput_regression_loop() -> None:
+    await _detector_loop(
+        "throughput-regression", 30, run_throughput_regression_detection,
+        broadcast_fn=ws_manager.broadcast_alert,
+    )
+
+
 async def _prom_gauge_loop() -> None:
     """Update Prometheus gauges every 5 seconds."""
     consecutive_failures = 0
@@ -209,6 +241,10 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     _background_tasks.append(asyncio.create_task(_zscore_loop()))
     _background_tasks.append(asyncio.create_task(_cross_node_loop()))
     _background_tasks.append(asyncio.create_task(_diloco_loop()))
+    _background_tasks.append(asyncio.create_task(_numeric_instability_loop()))
+    _background_tasks.append(asyncio.create_task(_training_stalled_loop()))
+    _background_tasks.append(asyncio.create_task(_loss_plateau_loop()))
+    _background_tasks.append(asyncio.create_task(_throughput_regression_loop()))
     _background_tasks.append(asyncio.create_task(metric_summary_loop()))
     _background_tasks.append(asyncio.create_task(_prom_gauge_loop()))
     _background_tasks.append(asyncio.create_task(_auto_diagnosis_loop()))
