@@ -14,7 +14,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CustomMetric } from "@/lib/types";
 
 interface CustomMetricsCardProps {
-  jobId: string;
   metrics: CustomMetric[];
 }
 
