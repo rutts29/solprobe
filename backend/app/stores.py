@@ -60,6 +60,22 @@ class MetricsStore:
         self._lock = threading.Lock()
         self._nodes: dict[str, _NodeBuffer] = {}
 
+    @staticmethod
+    def _mark_job_progress(job_id: str) -> None:
+        """Touch a registered job when telemetry proves it is running."""
+        if not job_id:
+            return
+        try:
+            job = job_store.get(job_id)
+        except NameError:
+            return
+        if job is None:
+            return
+        if job.get("status") == "registered":
+            job_store.update_status(job_id, "running")
+        else:
+            job_store.touch(job_id)
+
     def ingest_batch(self, batch: MetricsBatchModel) -> None:
         """Store a single MetricsBatch, creating the node buffer if needed."""
         # Determine node_id from the first GPU metric or training/diloco
@@ -92,10 +108,12 @@ class MetricsStore:
             if batch.training:
                 buf.training_metrics.append(batch.training)
                 buf.last_seen_ms = max(buf.last_seen_ms, batch.training.timestamp_ms)
+                self._mark_job_progress(batch.training.job_id)
 
             if batch.diloco:
                 buf.diloco_metrics.append(batch.diloco)
                 buf.last_seen_ms = max(buf.last_seen_ms, batch.diloco.timestamp_ms)
+                self._mark_job_progress(batch.diloco.job_id)
 
     def get_node_ids(self) -> list[str]:
         """Return all known node IDs."""

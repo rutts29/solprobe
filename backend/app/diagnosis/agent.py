@@ -364,11 +364,29 @@ class DiagnosisAgent:
         start_ms: int,
     ) -> DiagnosisResult | None:
         """Build a rule-based diagnosis for alert types with clear recovery semantics."""
-        if alert.alert_type not in {"gradient_explosion", "loss_spike", "straggler_detected"}:
+        fallback_types = {
+            "gradient_explosion",
+            "loss_spike",
+            "straggler_detected",
+            "numeric_instability",
+            "training_stalled",
+            "loss_plateau",
+            "throughput_regression",
+            "policy_violation",
+        }
+        if alert.alert_type not in fallback_types:
             return None
 
         evidence = alert.evidence or {}
         evidence_chain: list[EvidenceItem] = []
+        if "detector" in evidence:
+            evidence_chain.append(
+                EvidenceItem(
+                    metric="detector",
+                    value=str(evidence["detector"]),
+                    context="detector that raised this alert",
+                ),
+            )
         if "gradient_norm" in evidence:
             threshold = evidence.get("threshold", "configured threshold")
             evidence_chain.append(
@@ -447,7 +465,7 @@ class DiagnosisAgent:
                 "recommends skipping or inspecting the current shard before resuming."
             )
             confidence = 0.7
-        else:
+        elif alert.alert_type in {"straggler_detected", "throughput_regression"}:
             root_cause = "throughput_regression"
             action = RecommendedAction(
                 action="inspect_node_throughput",
@@ -463,6 +481,68 @@ class DiagnosisAgent:
                 "around the alert timestamp before rebalancing work."
             )
             confidence = 0.72
+        elif alert.alert_type == "numeric_instability":
+            root_cause = "numeric_instability"
+            action = RecommendedAction(
+                action="rollback_lr",
+                params={"factor": 0.5, "inspect_non_finite_metric": True},
+                urgency="immediate",
+            )
+            reasoning = (
+                "A training metric became NaN or infinite. That usually points to "
+                "numerical instability from learning rate, bad input data, mixed "
+                "precision overflow, or an unstable optimizer state. Claude diagnosis "
+                "was unavailable, so this local fallback recommends reducing the "
+                "learning rate and inspecting the latest batch and checkpoint."
+            )
+            confidence = 0.76
+        elif alert.alert_type == "training_stalled":
+            root_cause = "training_stalled"
+            action = RecommendedAction(
+                action="inspect_training_loop",
+                params={"node_id": alert.node_id},
+                urgency="soon" if alert.severity == "WARNING" else "immediate",
+            )
+            reasoning = (
+                "Training progress stopped while the node was still reporting metrics. "
+                "That is consistent with a blocked dataloader, checkpoint save, deadlock, "
+                "or training process hang. Claude diagnosis was unavailable, so this "
+                "local fallback recommends checking the training logs, dataloader, and "
+                "latest checkpoint operation before resuming."
+            )
+            confidence = 0.74
+        elif alert.alert_type == "loss_plateau":
+            root_cause = "loss_plateau"
+            action = RecommendedAction(
+                action="inspect_learning_dynamics",
+                params={"check_lr_schedule": True, "check_data_mix": True},
+                urgency="monitor",
+            )
+            reasoning = (
+                "Loss flattened while throughput remained healthy. That is consistent "
+                "with an exhausted learning-rate schedule, data distribution issue, "
+                "under-capacity model, or optimization plateau. Claude diagnosis was "
+                "unavailable, so this local fallback recommends checking learning-rate "
+                "schedule, batch composition, and validation behavior."
+            )
+            confidence = 0.68
+        else:
+            root_cause = "policy_violation"
+            action = RecommendedAction(
+                action="inspect_policy_trigger",
+                params={
+                    "policy_id": str(evidence.get("policy_id", "")),
+                    "field": str(evidence.get("field", "")),
+                },
+                urgency="soon" if alert.severity == "WARNING" else "immediate",
+            )
+            reasoning = (
+                "A user-defined monitoring policy fired. Claude diagnosis was unavailable, "
+                "so this local fallback recommends inspecting the policy threshold, the "
+                "actual metric value, and whether the policy is scoped to the intended "
+                "node or job before taking remediation."
+            )
+            confidence = 0.66
 
         return DiagnosisResult(
             diagnosis_id=diagnosis_id,

@@ -260,6 +260,49 @@ class TestDiagnosisAgent:
         assert result.error is None
         assert result.llm_model == "local-fallback"
 
+    @pytest.mark.parametrize(
+        ("alert_type", "root_cause", "action"),
+        [
+            ("numeric_instability", "numeric_instability", "rollback_lr"),
+            ("training_stalled", "training_stalled", "inspect_training_loop"),
+            ("loss_plateau", "loss_plateau", "inspect_learning_dynamics"),
+            ("throughput_regression", "throughput_regression", "inspect_node_throughput"),
+            ("policy_violation", "policy_violation", "inspect_policy_trigger"),
+        ],
+    )
+    @patch("app.diagnosis.agent.enrich_alert")
+    @patch("app.diagnosis.agent.anthropic")
+    def test_new_product_alerts_use_local_fallback(
+        self,
+        mock_anthropic_mod,
+        mock_enrich,
+        alert_type,
+        root_cause,
+        action,
+    ):
+        """New product alert types should not surface raw 502s when the LLM fails."""
+        from app.models.alerts import EnrichedAlert
+
+        alert = _make_alert(alert_type=alert_type, severity="WARNING")
+        alert.evidence = {"detector": alert_type, "step": "42", "field": "loss"}
+        enriched = EnrichedAlert(alert=alert, recent_metrics=[], node_history=[], correlated_events=[])
+        mock_enrich.return_value = enriched
+
+        mock_client = MagicMock()
+        mock_client.messages.create.side_effect = TypeError("SDK request construction failed")
+        mock_anthropic_mod.Anthropic.return_value = mock_client
+
+        store = DiagnosisStore()
+        agent = DiagnosisAgent(api_key="test-key", store=store, rate_limiter=DiagnosisRateLimiter())
+
+        result = agent.diagnose(alert, bypass_rate_limit=True)
+
+        assert result.status == "completed"
+        assert result.root_cause == root_cause
+        assert result.recommended_action.action == action
+        assert result.error is None
+        assert result.llm_model == "local-fallback"
+
     @patch("app.diagnosis.agent.enrich_alert")
     @patch("app.diagnosis.agent.anthropic")
     def test_gradient_explosion_rate_limit_uses_local_fallback(self, mock_anthropic_mod, mock_enrich):

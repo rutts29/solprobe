@@ -75,6 +75,10 @@ class LifecycleNoteRequest(BaseModel):
     author: str | None = None
 
 
+class JobStatusRequest(BaseModel):
+    status: str
+
+
 def _attach_lifecycle(alert: AlertModel) -> AlertWithLifecycle:
     return AlertWithLifecycle(
         **alert.model_dump(),
@@ -252,6 +256,21 @@ async def list_jobs() -> list[dict]:
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str) -> dict:
     """Get details of a specific training job."""
+    job = job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return job
+
+
+@router.patch("/jobs/{job_id}/status")
+async def patch_job_status(job_id: str, body: JobStatusRequest) -> dict:
+    """Update a job lifecycle status."""
+    if job_store.get(job_id) is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    try:
+        job_store.update_status(job_id, body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     job = job_store.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")

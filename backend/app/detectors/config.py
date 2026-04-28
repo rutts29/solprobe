@@ -38,6 +38,7 @@ class DetectionConfig(BaseSettings):
     stalled_critical_seconds: float = 300.0
     stalled_min_samples: int = 3
     stalled_dedup_cooldown_seconds: float = 60.0
+    stalled_node_fresh_seconds: float = 30.0
 
     # ── Loss plateau detector ──────────────────────
     plateau_window_steps: int = 50

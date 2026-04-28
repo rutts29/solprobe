@@ -282,6 +282,18 @@ class TestJobStore:
         store.touch("nonexistent")  # should not raise
         assert store.get("nonexistent") is None
 
+    def test_ingest_training_auto_marks_registered_job_running(self, fresh_stores):
+        ms, _, _, js, *_ = fresh_stores
+        js.register("job-1", {"model": "nanochat"}, ["node-1"])
+
+        ms.ingest_batch(
+            MetricsBatchModel(
+                training=_make_training_metric("node-1", step=1)
+            )
+        )
+
+        assert js.get("job-1")["status"] == "running"
+
     def test_re_register_preserves_created_at_updates_updated_at(self):
         store = JobStore()
         store.register("job-x", {}, ["n1"])

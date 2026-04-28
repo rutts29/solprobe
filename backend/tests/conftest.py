@@ -123,7 +123,9 @@ def fresh_stores(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(mod, "alert_store", als)
         if hasattr(mod, "anomaly_store"):
             monkeypatch.setattr(mod, "anomaly_store", ans)
+    monkeypatch.setattr(stores_mod, "job_store", js)
     monkeypatch.setattr(stores_mod, "custom_metrics_store", cms)
+    monkeypatch.setattr(stores_mod, "policy_store", pls)
 
     # Reset z-score deduplication state between tests
     zscore_mod._last_alerted.clear()
