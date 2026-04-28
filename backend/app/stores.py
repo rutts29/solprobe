@@ -15,6 +15,7 @@ from typing import Any
 
 from app.models.alerts import AlertModel
 from app.models.metrics import (
+    CustomMetricModel,
     DiLoCoMetricsModel,
     GpuMetricsModel,
     MetricsBatchModel,
@@ -423,6 +424,89 @@ class AlertLifecycleStore:
         return {"state": entry["state"], "notes": [dict(n) for n in entry["notes"]]}
 
 
+_CUSTOM_METRIC_BUFFER_CAP = 1800
+
+
+class CustomMetricsStore:
+    """Thread-safe in-memory store for user-defined custom metrics.
+
+    Storage is partitioned into per-(name, job_id) ring buffers, each holding the
+    most recent ``max_per_key`` samples. ``node_id`` is *not* part of the key —
+    multiple nodes reporting the same (name, job_id) share a single buffer and
+    can be separated with the ``node_id`` query filter.
+    """
+
+    def __init__(self, max_per_key: int = _CUSTOM_METRIC_BUFFER_CAP) -> None:
+        self._lock = threading.Lock()
+        self._buffers: dict[tuple[str, str], deque[CustomMetricModel]] = {}
+        self._max_per_key = max_per_key
+
+    def _key(self, metric: CustomMetricModel) -> tuple[str, str]:
+        return (metric.name, metric.job_id)
+
+    def add(self, metric: CustomMetricModel) -> None:
+        key = self._key(metric)
+        with self._lock:
+            buf = self._buffers.get(key)
+            if buf is None:
+                buf = deque(maxlen=self._max_per_key)
+                self._buffers[key] = buf
+            buf.append(metric)
+
+    def query(
+        self,
+        *,
+        name: str | None = None,
+        job_id: str | None = None,
+        node_id: str | None = None,
+        limit: int = 500,
+    ) -> list[CustomMetricModel]:
+        """Return matching metrics newest-first, up to ``limit`` items."""
+        with self._lock:
+            relevant_buffers: list[deque[CustomMetricModel]] = []
+            for (n, j), buf in self._buffers.items():
+                if name is not None and n != name:
+                    continue
+                if job_id is not None and j != job_id:
+                    continue
+                relevant_buffers.append(buf)
+            candidates: list[CustomMetricModel] = []
+            for buf in relevant_buffers:
+                for m in buf:
+                    if node_id is not None and m.node_id != node_id:
+                        continue
+                    candidates.append(m)
+        candidates.sort(key=lambda m: m.timestamp_ms, reverse=True)
+        return candidates[:limit]
+
+    def get_names(self, job_id: str | None = None) -> list[str]:
+        with self._lock:
+            names: set[str] = set()
+            for (n, j) in self._buffers.keys():
+                if job_id is not None and j != job_id:
+                    continue
+                names.add(n)
+            return sorted(names)
+
+    def get_latest(
+        self,
+        name: str,
+        job_id: str | None = None,
+        node_id: str | None = None,
+    ) -> CustomMetricModel | None:
+        """Policy evaluator entrypoint.
+
+        Return the most recent ``CustomMetricModel`` whose ``name`` matches and
+        which optionally also matches ``job_id`` and/or ``node_id``. Returns
+        ``None`` if no sample has been recorded for the given filters. The
+        policy engine (``frank``'s sequential teammate scope) calls this to
+        evaluate ``{"metric": {"source": "custom", "name": ...}}`` policies
+        against the latest observed value.
+        """
+        results = self.query(name=name, job_id=job_id, node_id=node_id, limit=1)
+        return results[0] if results else None
+
+
 # ---------------------------------------------------------------------------
 # Global singleton instances — imported by gRPC server, detectors, and routes
 # ---------------------------------------------------------------------------
@@ -431,3 +515,4 @@ alert_store = AlertStore()
 anomaly_store = AnomalyStore()
 job_store = JobStore()
 alert_lifecycle_store = AlertLifecycleStore()
+custom_metrics_store = CustomMetricsStore()

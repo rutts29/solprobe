@@ -9,6 +9,7 @@ import type {
   DiagnosisResult,
   JobModel,
   JobSummary,
+  CustomMetric,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -106,5 +107,25 @@ export function postAlertNote(
     method: "POST",
     body: JSON.stringify({ text, author: author ?? null }),
   });
+}
+
+export function fetchCustomMetrics(params: {
+  job_id?: string;
+  name?: string;
+  node_id?: string;
+  limit?: number;
+}): Promise<CustomMetric[]> {
+  const search = new URLSearchParams();
+  if (params.job_id) search.set("job_id", params.job_id);
+  if (params.name) search.set("name", params.name);
+  if (params.node_id) search.set("node_id", params.node_id);
+  if (params.limit) search.set("limit", String(params.limit));
+  const qs = search.toString();
+  return apiFetch(`/api/v1/custom-metrics${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchCustomMetricNames(jobId?: string): Promise<string[]> {
+  const qs = jobId ? `?job_id=${encodeURIComponent(jobId)}` : "";
+  return apiFetch(`/api/v1/custom-metrics/names${qs}`);
 }
 

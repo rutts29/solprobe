@@ -103,3 +103,16 @@ class NodeStatus(BaseModel):
     latest_metrics: list[GpuMetricsModel]
     latest_training: TrainingMetricsModel | None = None
     latest_diloco: DiLoCoMetricsModel | None = None
+
+
+class CustomMetricModel(BaseModel):
+    """User-defined metric reported by a training script via REST."""
+
+    node_id: str
+    job_id: str
+    timestamp_ms: int
+    step: int | None = None
+    name: str
+    value: float
+    unit: str | None = None
+    tags: dict[str, str] = Field(default_factory=dict)
