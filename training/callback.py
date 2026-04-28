@@ -20,12 +20,19 @@ Binary layout (little-endian, 64 bytes padded):
 
 from __future__ import annotations
 
+import json
+import logging
 import mmap
 import os
 import struct
+import threading
 import time
 from pathlib import Path
 from typing import Any
+from urllib import request as _urlrequest
+from urllib import error as _urlerror
+
+logger = logging.getLogger(__name__)
 
 # Lazy torch import -- only needed at method call time.
 _torch = None
@@ -100,13 +107,20 @@ class SolProbeCallback:
         node_id: str = "node-0",
         peak_tps: float = 15000.0,
         mmap_dir: str | Path | None = None,
+        job_id: str | None = None,
+        backend_url: str | None = None,
     ) -> None:
         self.node_id = node_id
         self.peak_tps = peak_tps
+        self.job_id = job_id
+        self.backend_url = backend_url or os.environ.get(
+            "SOLPROBE_BACKEND_URL", "http://localhost:8000"
+        )
         self._mmap_dir = Path(mmap_dir or os.environ.get("SOLPROBE_MMAP_DIR", "/tmp"))
         self._mmap_dir.mkdir(parents=True, exist_ok=True)
         self._path = self._mmap_dir / f"solprobe_training_{node_id}.bin"
         self._closed = False
+        self._log_metric_warned = False
 
         # Create / truncate the backing file to _FILE_SIZE bytes.
         with open(self._path, "wb") as f:
@@ -175,6 +189,69 @@ class SolProbeCallback:
             throughput_tps=throughput_tps,
             mfu_pct=mfu_pct,
         )
+
+    def log_metric(
+        self,
+        name: str,
+        value: float,
+        *,
+        step: int | None = None,
+        unit: str | None = None,
+        tags: dict[str, str] | None = None,
+        job_id: str | None = None,
+    ) -> None:
+        """Record a user-defined custom metric to the SolProbe backend.
+
+        Fire-and-forget: ships the metric on a daemon thread with a short
+        timeout, never raises, and warns once per callback if the backend URL
+        or ``job_id`` is missing. ``job_id`` resolution order is the explicit
+        argument, then ``self.job_id`` from construction.
+        """
+        effective_job = job_id or self.job_id
+        if not effective_job:
+            if not self._log_metric_warned:
+                logger.warning(
+                    "SolProbeCallback.log_metric called without job_id; "
+                    "set job_id on the callback or pass it per-call."
+                )
+                self._log_metric_warned = True
+            return
+        if not self.backend_url:
+            if not self._log_metric_warned:
+                logger.warning(
+                    "SolProbeCallback.log_metric: backend_url not configured."
+                )
+                self._log_metric_warned = True
+            return
+
+        payload = {
+            "node_id": self.node_id,
+            "job_id": effective_job,
+            "timestamp_ms": int(time.time() * 1000),
+            "step": step,
+            "name": name,
+            "value": float(value),
+            "unit": unit,
+            "tags": tags or {},
+        }
+        url = self.backend_url.rstrip("/") + "/api/v1/custom-metrics"
+
+        def _send() -> None:
+            try:
+                req = _urlrequest.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with _urlrequest.urlopen(req, timeout=2.0):
+                    pass
+            except (_urlerror.URLError, TimeoutError, OSError) as exc:
+                logger.warning("log_metric POST failed: %s", exc)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("log_metric unexpected error: %s", exc)
+
+        threading.Thread(target=_send, daemon=True).start()
 
     def on_train_end(self) -> None:
         """Signal that training has finished and invalidate the shared buffer."""

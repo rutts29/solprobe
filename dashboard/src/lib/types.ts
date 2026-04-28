@@ -232,3 +232,14 @@ export interface PolicyCreate {
 }
 
 export type PolicyUpdate = Partial<Omit<PolicyCreate, "policy_id">>;
+
+export interface CustomMetric {
+  node_id: string;
+  job_id: string;
+  timestamp_ms: number;
+  step?: number | null;
+  name: string;
+  value: number;
+  unit?: string | null;
+  tags: Record<string, string>;
+}

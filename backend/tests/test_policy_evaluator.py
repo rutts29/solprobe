@@ -69,7 +69,7 @@ class TestThresholdTrigger:
         assert als.count == 0
 
     def test_gt_triggers_alert(self, fresh_stores):
-        ms, als, _, _, _, _, pls = fresh_stores
+        ms, als, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, grad_norm=200.0)
         findings = run_policy_evaluation()
@@ -85,7 +85,7 @@ class TestThresholdTrigger:
         assert als.count == 1
 
     def test_gt_below_threshold_no_alert(self, fresh_stores):
-        ms, als, _, _, _, _, pls = fresh_stores
+        ms, als, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, grad_norm=50.0)
         findings = run_policy_evaluation()
@@ -93,7 +93,7 @@ class TestThresholdTrigger:
         assert als.count == 0
 
     def test_lt_triggers_alert(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(field="throughput_tps", operator="lt", threshold=10.0))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, throughput=5.0)
         findings = run_policy_evaluation()
@@ -101,14 +101,14 @@ class TestThresholdTrigger:
         assert findings[0].alert.evidence["field"] == "training.throughput_tps"
 
     def test_abs_gt_triggers_alert(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(field="loss", operator="abs_gt", threshold=10.0))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, loss=-15.0)
         findings = run_policy_evaluation()
         assert len(findings) == 1
 
     def test_disabled_policy_skipped(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(enabled=False))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, grad_norm=200.0)
         findings = run_policy_evaluation()
@@ -117,7 +117,7 @@ class TestThresholdTrigger:
 
 class TestSustainedViolation:
     def test_for_seconds_satisfied(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0, for_seconds=5.0, cooldown_seconds=0))
         # 6 samples spanning 6 seconds, all > 100
         _ingest_training(ms, "node-1", count=6, start_ts=1_000_000_000, interval_ms=1200, grad_norm=200.0)
@@ -125,7 +125,7 @@ class TestSustainedViolation:
         assert len(findings) == 1
 
     def test_for_seconds_not_satisfied(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0, for_seconds=10.0, cooldown_seconds=0))
         # 3 samples spanning ~2 seconds — not enough
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, interval_ms=1000, grad_norm=200.0)
@@ -133,7 +133,7 @@ class TestSustainedViolation:
         assert findings == []
 
     def test_violation_resets_when_below(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0, for_seconds=5.0, cooldown_seconds=0))
         # 3 samples below, then 2 above — only the trailing 2 (~1s) count
         for i, gn in enumerate([50.0, 50.0, 50.0, 200.0, 200.0]):
@@ -149,7 +149,7 @@ class TestSustainedViolation:
 
 class TestCooldown:
     def test_repeat_within_cooldown_suppressed(self, fresh_stores):
-        ms, als, _, _, _, _, pls = fresh_stores
+        ms, als, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0, cooldown_seconds=60.0))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, grad_norm=200.0)
         first = run_policy_evaluation()
@@ -162,7 +162,7 @@ class TestCooldown:
 
 class TestScopeFiltering:
     def test_node_scope_only_target(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0, scope_node="node-1", cooldown_seconds=0))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, grad_norm=200.0)
         _ingest_training(ms, "node-2", count=3, start_ts=1_000_000_000, grad_norm=200.0)
@@ -171,7 +171,7 @@ class TestScopeFiltering:
         assert findings[0].alert.node_id == "node-1"
 
     def test_job_scope_filters(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0, scope_job="other-job", cooldown_seconds=0))
         # All training metrics emitted by _make_training_metric carry job_id="job-1"
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, grad_norm=200.0)
@@ -179,7 +179,7 @@ class TestScopeFiltering:
         assert findings == []
 
     def test_no_scope_evaluates_all_nodes(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(operator="gt", threshold=100.0, cooldown_seconds=0))
         _ingest_training(ms, "node-1", count=3, start_ts=1_000_000_000, grad_norm=200.0)
         _ingest_training(ms, "node-2", count=3, start_ts=1_000_000_000, grad_norm=200.0)
@@ -189,7 +189,7 @@ class TestScopeFiltering:
 
 class TestStaleFor:
     def test_stale_step_triggers(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(
             _make_policy(
                 field="step", operator="stale_for", for_seconds=60.0, cooldown_seconds=0,
@@ -210,7 +210,7 @@ class TestStaleFor:
         assert float(alert.evidence["duration_seconds"]) >= 60.0
 
     def test_advancing_step_no_alert(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(
             _make_policy(
                 field="step", operator="stale_for", for_seconds=60.0, cooldown_seconds=0,
@@ -227,7 +227,7 @@ class TestStaleFor:
         assert findings == []
 
     def test_short_stall_no_alert(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(
             _make_policy(
                 field="step", operator="stale_for", for_seconds=60.0, cooldown_seconds=0,
@@ -246,7 +246,7 @@ class TestStaleFor:
 
 class TestGpuSource:
     def test_gpu_field_threshold(self, fresh_stores):
-        ms, _, _, _, _, _, pls = fresh_stores
+        ms, *_, pls = fresh_stores
         pls.create(_make_policy(source="gpu", field="fb_used_mb", operator="gt", threshold=14000.0, cooldown_seconds=0))
         # _make_gpu_metric default is fb_used_mb=8000 — below threshold
         ms.ingest_batch(MetricsBatchModel(gpu=[_make_gpu_metric("node-1", ts=1_000_000_000)]))
