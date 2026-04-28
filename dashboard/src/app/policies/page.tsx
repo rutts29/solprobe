@@ -1,0 +1,624 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatTimestamp } from "@/lib/utils";
+import {
+  fetchPolicies,
+  createPolicy,
+  patchPolicy,
+  deletePolicy,
+  togglePolicy,
+} from "@/lib/api";
+import type {
+  MonitoringPolicy,
+  PolicyCreate,
+  PolicyOperator,
+  PolicySeverity,
+  PolicySource,
+} from "@/lib/types";
+
+interface PolicyPreset {
+  label: string;
+  body: PolicyCreate;
+}
+
+const PRESETS: PolicyPreset[] = [
+  {
+    label: "Gradient norm warning",
+    body: {
+      policy_id: "grad-norm-warning",
+      name: "Gradient norm warning",
+      metric: { source: "training", field: "gradient_norm" },
+      condition: { operator: "gt", threshold: 50, for_seconds: 5 },
+      severity: "WARNING",
+      cooldown_seconds: 60,
+      description: "Gradient norm exceeded soft threshold",
+    },
+  },
+  {
+    label: "Gradient norm critical",
+    body: {
+      policy_id: "grad-norm-critical",
+      name: "Gradient norm critical",
+      metric: { source: "training", field: "gradient_norm" },
+      condition: { operator: "gt", threshold: 100, for_seconds: 5 },
+      severity: "CRITICAL",
+      cooldown_seconds: 60,
+      description: "Gradient norm exceeded safe range",
+    },
+  },
+  {
+    label: "Low throughput",
+    body: {
+      policy_id: "low-throughput",
+      name: "Low throughput",
+      metric: { source: "training", field: "throughput_tps" },
+      condition: { operator: "lt", threshold: 10, for_seconds: 30 },
+      severity: "WARNING",
+      cooldown_seconds: 120,
+      description: "Training throughput dropped below 10 tokens/sec",
+    },
+  },
+  {
+    label: "Training stalled",
+    body: {
+      policy_id: "training-stalled",
+      name: "Training stalled",
+      metric: { source: "training", field: "step" },
+      condition: { operator: "stale_for", threshold: 0, for_seconds: 60 },
+      severity: "CRITICAL",
+      cooldown_seconds: 120,
+      description: "Training step has not advanced for 60 seconds",
+    },
+  },
+  {
+    label: "High GPU memory",
+    body: {
+      policy_id: "high-gpu-memory",
+      name: "High GPU memory",
+      metric: { source: "gpu", field: "fb_used_mb" },
+      condition: { operator: "gt", threshold: 14000, for_seconds: 10 },
+      severity: "WARNING",
+      cooldown_seconds: 60,
+      description: "GPU framebuffer usage above 14 GB",
+    },
+  },
+  {
+    label: "Apple GPU utilization sustained high",
+    body: {
+      policy_id: "apple-gpu-util-high",
+      name: "Apple GPU utilization sustained high",
+      metric: { source: "gpu", field: "gpu_utilization_pct" },
+      condition: { operator: "gt", threshold: 90, for_seconds: 30 },
+      severity: "INFO",
+      cooldown_seconds: 120,
+      description: "GPU utilization above 90% for 30+ seconds",
+    },
+  },
+];
+
+const SOURCE_FIELDS: Record<PolicySource, string[]> = {
+  gpu: [
+    "gpu_temp_c",
+    "gpu_utilization_pct",
+    "fb_used_mb",
+    "fb_free_mb",
+    "power_usage_w",
+    "sm_active_pct",
+    "tensor_active_pct",
+    "mem_copy_utilization_pct",
+  ],
+  training: ["loss", "gradient_norm", "throughput_tps", "mfu_pct", "learning_rate", "step"],
+  diloco: [
+    "inner_step",
+    "outer_step",
+    "inner_loss",
+    "outer_loss",
+    "pseudo_grad_norm",
+    "sync_duration_ms",
+    "worker_speed_ratio",
+  ],
+};
+
+const OPERATORS: { value: PolicyOperator; label: string }[] = [
+  { value: "gt", label: "greater than (>)" },
+  { value: "gte", label: "≥" },
+  { value: "lt", label: "less than (<)" },
+  { value: "lte", label: "≤" },
+  { value: "abs_gt", label: "|x| greater than" },
+  { value: "stale_for", label: "unchanged for" },
+];
+
+const SEVERITIES: PolicySeverity[] = ["INFO", "WARNING", "CRITICAL"];
+
+function severityVariant(s: PolicySeverity): "default" | "secondary" | "destructive" {
+  if (s === "CRITICAL") return "destructive";
+  if (s === "WARNING") return "default";
+  return "secondary";
+}
+
+const EMPTY_FORM: PolicyCreate = {
+  policy_id: "",
+  name: "",
+  enabled: true,
+  scope: { job_id: null, node_id: null },
+  metric: { source: "training", field: "gradient_norm" },
+  condition: { operator: "gt", threshold: 0, for_seconds: 0 },
+  severity: "WARNING",
+  cooldown_seconds: 60,
+  description: "",
+};
+
+export default function PoliciesPage() {
+  const [policies, setPolicies] = useState<MonitoringPolicy[]>([]);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<PolicyCreate>(EMPTY_FORM);
+  const [submitting, setSubmitting] = useState(false);
+
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const data = await fetchPolicies();
+      if (signal?.aborted) return;
+      setPolicies(data);
+      setError(null);
+      setLoadedOnce(true);
+    } catch (e) {
+      if (signal?.aborted) return;
+      setError(e instanceof Error ? e.message : "Failed to fetch policies");
+      setLoadedOnce(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    refresh(controller.signal);
+    const interval = setInterval(() => refresh(controller.signal), 5000);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [refresh]);
+
+  function openCreateDrawer(initial?: PolicyCreate) {
+    setEditingId(null);
+    setForm(initial ?? EMPTY_FORM);
+    setDrawerOpen(true);
+  }
+
+  function openEditDrawer(p: MonitoringPolicy) {
+    setEditingId(p.policy_id);
+    setForm({
+      policy_id: p.policy_id,
+      name: p.name,
+      enabled: p.enabled,
+      scope: p.scope,
+      metric: p.metric,
+      condition: p.condition,
+      severity: p.severity,
+      cooldown_seconds: p.cooldown_seconds,
+      description: p.description,
+    });
+    setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    setEditingId(null);
+    setError(null);
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      if (editingId) {
+        const patch = { ...form } as Partial<PolicyCreate>;
+        delete patch.policy_id;
+        await patchPolicy(editingId, patch);
+      } else {
+        await createPolicy(form);
+      }
+      await refresh();
+      closeDrawer();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save policy");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleToggle(policyId: string) {
+    try {
+      await togglePolicy(policyId);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to toggle policy");
+    }
+  }
+
+  async function handleDelete(policyId: string) {
+    if (!window.confirm(`Delete policy "${policyId}"?`)) return;
+    try {
+      await deletePolicy(policyId);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete policy");
+    }
+  }
+
+  const sourceFieldOptions = useMemo(
+    () => SOURCE_FIELDS[form.metric.source] ?? [],
+    [form.metric.source],
+  );
+
+  if (!loadedOnce) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight">Policies</h1>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Monitoring policies</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            User-defined thresholds over training and hardware metrics. Violations raise alerts.
+          </p>
+        </div>
+        <Button onClick={() => openCreateDrawer()}>New policy</Button>
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Presets</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {PRESETS.map((p) => {
+              const exists = policies.some((existing) => existing.policy_id === p.body.policy_id);
+              return (
+                <Button
+                  key={p.body.policy_id}
+                  variant="outline"
+                  size="sm"
+                  disabled={exists}
+                  onClick={() => openCreateDrawer(p.body)}
+                  title={exists ? "Already added" : "Click to fill the form"}
+                >
+                  {p.label}
+                  {exists && <span className="ml-2 text-xs text-muted-foreground">(added)</span>}
+                </Button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All policies ({policies.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {policies.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No policies yet. Click a preset above or create one.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="py-2 pr-3">Name</th>
+                    <th className="py-2 pr-3">Source</th>
+                    <th className="py-2 pr-3">Field</th>
+                    <th className="py-2 pr-3">Condition</th>
+                    <th className="py-2 pr-3">Severity</th>
+                    <th className="py-2 pr-3">Last triggered</th>
+                    <th className="py-2 pr-3">Enabled</th>
+                    <th className="py-2 pr-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {policies.map((p) => (
+                    <tr key={p.policy_id} className="border-b last:border-b-0">
+                      <td className="py-2 pr-3">
+                        <button
+                          className="font-medium text-left hover:underline"
+                          onClick={() => openEditDrawer(p)}
+                        >
+                          {p.name}
+                        </button>
+                        <div className="text-xs font-mono text-muted-foreground">{p.policy_id}</div>
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-xs">{p.metric.source}</td>
+                      <td className="py-2 pr-3 font-mono text-xs">{p.metric.field}</td>
+                      <td className="py-2 pr-3 font-mono text-xs">
+                        {p.condition.operator === "stale_for"
+                          ? `unchanged for ${p.condition.for_seconds}s`
+                          : `${p.condition.operator} ${p.condition.threshold}${
+                              p.condition.for_seconds > 0
+                                ? ` for ${p.condition.for_seconds}s`
+                                : ""
+                            }`}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <Badge variant={severityVariant(p.severity)}>{p.severity}</Badge>
+                      </td>
+                      <td className="py-2 pr-3 text-xs text-muted-foreground">
+                        {p.last_triggered_at_ms
+                          ? formatTimestamp(p.last_triggered_at_ms)
+                          : "—"}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <button
+                          onClick={() => handleToggle(p.policy_id)}
+                          className={`text-xs px-2 py-1 rounded-md border ${
+                            p.enabled
+                              ? "bg-green-500/10 border-green-500/30 text-green-400"
+                              : "bg-muted border-border text-muted-foreground"
+                          }`}
+                        >
+                          {p.enabled ? "on" : "off"}
+                        </button>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(p.policy_id)}
+                        >
+                          Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+          onClick={closeDrawer}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="absolute right-0 top-0 h-full w-full max-w-md border-l bg-card p-6 overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2 mb-4">
+              <h2 className="text-lg font-semibold">
+                {editingId ? "Edit policy" : "New policy"}
+              </h2>
+              <button onClick={closeDrawer} className="text-sm text-muted-foreground hover:text-foreground">
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <Field label="Policy ID">
+                <input
+                  type="text"
+                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                  value={form.policy_id}
+                  disabled={!!editingId}
+                  onChange={(e) => setForm({ ...form, policy_id: e.target.value })}
+                />
+              </Field>
+
+              <Field label="Name">
+                <input
+                  type="text"
+                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Source">
+                  <select
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                    value={form.metric.source}
+                    onChange={(e) => {
+                      const source = e.target.value as PolicySource;
+                      const fields = SOURCE_FIELDS[source];
+                      setForm({
+                        ...form,
+                        metric: { source, field: fields[0] ?? "" },
+                      });
+                    }}
+                  >
+                    <option value="gpu">gpu</option>
+                    <option value="training">training</option>
+                    <option value="diloco">diloco</option>
+                  </select>
+                </Field>
+                <Field label="Field">
+                  <select
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    value={form.metric.field}
+                    onChange={(e) =>
+                      setForm({ ...form, metric: { ...form.metric, field: e.target.value } })
+                    }
+                  >
+                    {sourceFieldOptions.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Operator">
+                <select
+                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  value={form.condition.operator}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      condition: { ...form.condition, operator: e.target.value as PolicyOperator },
+                    })
+                  }
+                >
+                  {OPERATORS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              {form.condition.operator !== "stale_for" && (
+                <Field label="Threshold">
+                  <input
+                    type="number"
+                    step="any"
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    value={form.condition.threshold}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        condition: { ...form.condition, threshold: parseFloat(e.target.value) || 0 },
+                      })
+                    }
+                  />
+                </Field>
+              )}
+
+              <Field label="Duration (seconds)">
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                  value={form.condition.for_seconds}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      condition: { ...form.condition, for_seconds: parseFloat(e.target.value) || 0 },
+                    })
+                  }
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Severity">
+                  <select
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                    value={form.severity}
+                    onChange={(e) =>
+                      setForm({ ...form, severity: e.target.value as PolicySeverity })
+                    }
+                  >
+                    {SEVERITIES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Cooldown (seconds)">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    value={form.cooldown_seconds}
+                    onChange={(e) =>
+                      setForm({ ...form, cooldown_seconds: parseFloat(e.target.value) || 0 })
+                    }
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Scope: node_id">
+                  <input
+                    type="text"
+                    placeholder="(any)"
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    value={form.scope?.node_id ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        scope: {
+                          job_id: form.scope?.job_id ?? null,
+                          node_id: e.target.value.trim() || null,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="Scope: job_id">
+                  <input
+                    type="text"
+                    placeholder="(any)"
+                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    value={form.scope?.job_id ?? ""}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        scope: {
+                          node_id: form.scope?.node_id ?? null,
+                          job_id: e.target.value.trim() || null,
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+
+              <Field label="Description">
+                <textarea
+                  rows={2}
+                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  value={form.description ?? ""}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </Field>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={closeDrawer}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+                  {submitting ? "Saving..." : editingId ? "Save changes" : "Create"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs uppercase tracking-wider text-muted-foreground">{label}</label>
+      {children}
+    </div>
+  );
+}

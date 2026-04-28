@@ -177,3 +177,58 @@ export interface JobSummary {
   diagnoses: DiagnosisResult[];
   run_duration_ms: number;
 }
+
+export type PolicySource = "gpu" | "training" | "diloco";
+export type PolicyOperator =
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "abs_gt"
+  | "stale_for";
+export type PolicySeverity = "INFO" | "WARNING" | "CRITICAL";
+
+export interface PolicyScope {
+  job_id: string | null;
+  node_id: string | null;
+}
+
+export interface PolicyMetric {
+  source: PolicySource;
+  field: string;
+}
+
+export interface PolicyCondition {
+  operator: PolicyOperator;
+  threshold: number;
+  for_seconds: number;
+}
+
+export interface MonitoringPolicy {
+  policy_id: string;
+  name: string;
+  enabled: boolean;
+  scope: PolicyScope;
+  metric: PolicyMetric;
+  condition: PolicyCondition;
+  severity: PolicySeverity;
+  cooldown_seconds: number;
+  description: string;
+  created_at_ms: number;
+  updated_at_ms: number;
+  last_triggered_at_ms: number | null;
+}
+
+export interface PolicyCreate {
+  policy_id: string;
+  name: string;
+  enabled?: boolean;
+  scope?: PolicyScope;
+  metric: PolicyMetric;
+  condition: PolicyCondition;
+  severity?: PolicySeverity;
+  cooldown_seconds?: number;
+  description?: string;
+}
+
+export type PolicyUpdate = Partial<Omit<PolicyCreate, "policy_id">>;
