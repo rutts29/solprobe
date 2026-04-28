@@ -121,7 +121,7 @@ export default function TrainingPage() {
 
       <RunPanel training={training} diloco={null} history={history} />
 
-      <CustomMetricsCard jobId={job.job_id} metrics={customMetrics} />
+      <CustomMetricsCard metrics={customMetrics} />
 
       {hardware && (
         <Card>
