@@ -5,6 +5,8 @@ import type {
   AlertModel,
   EnrichedAlert,
   DiagnosisResult,
+  JobModel,
+  JobSummary,
 } from "./types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
@@ -73,5 +75,13 @@ export function requestDiagnosis(alertId: string): Promise<DiagnosisResult> {
 
 export function fetchAlertDiagnosis(alertId: string): Promise<DiagnosisResult> {
   return apiFetch(`/api/v1/alerts/${alertId}/diagnosis`);
+}
+
+export function fetchJobs(): Promise<JobModel[]> {
+  return apiFetch("/api/v1/jobs");
+}
+
+export function fetchJobSummary(jobId: string): Promise<JobSummary> {
+  return apiFetch(`/api/v1/jobs/${jobId}/summary`);
 }
 

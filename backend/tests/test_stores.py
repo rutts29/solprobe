@@ -217,3 +217,77 @@ class TestJobStore:
         assert store.get("job-b") is None
         assert store.get("job-a") is not None
         assert store.get("job-d") is not None
+
+    def test_register_seeds_status_and_timestamps(self):
+        store = JobStore()
+        before_ms = int(time.time() * 1000)
+        store.register("job-x", {}, ["n1"], name="Nanochat run")
+        after_ms = int(time.time() * 1000)
+
+        job = store.get("job-x")
+        assert job is not None
+        assert job["job_id"] == "job-x"
+        assert job["name"] == "Nanochat run"
+        assert job["status"] == "registered"
+        assert before_ms <= job["created_at_ms"] <= after_ms
+        assert job["updated_at_ms"] == job["created_at_ms"]
+
+    def test_register_default_name_is_none(self):
+        store = JobStore()
+        store.register("job-x", {}, ["n1"])
+        job = store.get("job-x")
+        assert job is not None
+        assert job["name"] is None
+
+    def test_update_status_changes_status_and_touches_updated_at(self):
+        store = JobStore()
+        store.register("job-x", {}, ["n1"])
+        original_updated = store.get("job-x")["updated_at_ms"]
+
+        time.sleep(0.005)  # ensure clock advances at least 1ms
+        store.update_status("job-x", "running")
+
+        job = store.get("job-x")
+        assert job["status"] == "running"
+        assert job["updated_at_ms"] > original_updated
+
+    def test_update_status_unknown_job_is_noop(self):
+        store = JobStore()
+        # Should not raise
+        store.update_status("nonexistent", "running")
+        assert store.get("nonexistent") is None
+
+    def test_update_status_rejects_invalid_status(self):
+        store = JobStore()
+        store.register("job-x", {}, ["n1"])
+        try:
+            store.update_status("job-x", "bogus")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError for invalid status")
+
+    def test_touch_advances_updated_at(self):
+        store = JobStore()
+        store.register("job-x", {}, ["n1"])
+        before = store.get("job-x")["updated_at_ms"]
+        time.sleep(0.005)
+        store.touch("job-x")
+        assert store.get("job-x")["updated_at_ms"] > before
+
+    def test_touch_unknown_job_is_noop(self):
+        store = JobStore()
+        store.touch("nonexistent")  # should not raise
+        assert store.get("nonexistent") is None
+
+    def test_re_register_preserves_created_at_updates_updated_at(self):
+        store = JobStore()
+        store.register("job-x", {}, ["n1"])
+        first_created = store.get("job-x")["created_at_ms"]
+
+        time.sleep(0.005)
+        store.register("job-x", {}, ["n1"], name="rename")
+        job = store.get("job-x")
+        assert job["created_at_ms"] == first_created
+        assert job["updated_at_ms"] > first_created
+        assert job["name"] == "rename"

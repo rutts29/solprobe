@@ -21,9 +21,26 @@ use crate::collectors::MetricCollector;
 use crate::config::SidecarConfig;
 use crate::detectors::threshold::ThresholdDetector;
 use crate::detectors::Detector;
+use crate::proto::solprobe::v1::MetricsBatch;
 use crate::simulator::Simulator;
 use crate::transport::grpc::GrpcTransport;
 use crate::transport::prometheus::PrometheusExporter;
+
+/// Stamp the configured `--job-id` onto outgoing training/diloco metrics
+/// when the metric's own `job_id` is empty. Mmap-written values win when present.
+fn apply_job_id_override(batch: &mut MetricsBatch, override_id: Option<&str>) {
+    let Some(id) = override_id else { return };
+    if let Some(t) = batch.training.as_mut() {
+        if t.job_id.is_empty() {
+            t.job_id = id.to_string();
+        }
+    }
+    if let Some(d) = batch.diloco.as_mut() {
+        if d.job_id.is_empty() {
+            d.job_id = id.to_string();
+        }
+    }
+}
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "solprobe-sidecar", about = "GPU metrics sidecar for SolProbe")]
@@ -43,6 +60,12 @@ pub struct Args {
     /// Unique node identifier
     #[arg(long, default_value = "node-0")]
     node_id: String,
+
+    /// Optional training job ID. Stamped onto outgoing training/DiLoCo metrics
+    /// when the metric's own job_id is empty, and onto edge alerts that lack
+    /// a job_id from upstream metrics.
+    #[arg(long)]
+    job_id: Option<String>,
 
     /// Backend gRPC address
     #[arg(long, default_value = "http://localhost:50051")]
@@ -242,7 +265,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Collect metrics
-        let batch = match collector.collect().await {
+        let mut batch = match collector.collect().await {
             Ok(b) => b,
             Err(e) => {
                 tracing::error!(error = %e, "Failed to collect metrics");
@@ -250,10 +273,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
+        // Stamp configured --job-id onto training/diloco metrics when empty.
+        apply_job_id_override(&mut batch, args.job_id.as_deref());
+
         // Run detector
-        let alerts = detector.check(&batch);
+        let mut alerts = detector.check(&batch);
         if !alerts.is_empty() {
             tracing::warn!(count = alerts.len(), "Detected anomalies");
+        }
+
+        // Stamp configured --job-id onto edge alerts that don't already have one.
+        if let Some(id) = args.job_id.as_deref() {
+            for a in alerts.iter_mut() {
+                if a.job_id.as_deref().map_or(true, str::is_empty) {
+                    a.job_id = Some(id.to_string());
+                }
+            }
         }
 
         // Send alerts via gRPC
