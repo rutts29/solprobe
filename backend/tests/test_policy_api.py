@@ -111,3 +111,32 @@ class TestPolicyCRUD:
             json={"metric": {"source": "training", "field": "no_such_field"}},
         )
         assert resp.status_code == 422
+
+
+class TestPolicyCustomSource:
+    async def test_create_custom_source_policy(self, client):
+        body = _body(
+            "custom-bpb",
+            metric={"source": "custom", "field": "eval_bpb"},
+            condition={"operator": "gt", "threshold": 2.0, "for_seconds": 5.0},
+            severity="CRITICAL",
+        )
+        resp = await client.post("/api/v1/policies", json=body)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["metric"]["source"] == "custom"
+        assert data["metric"]["field"] == "eval_bpb"
+
+    async def test_custom_source_accepts_arbitrary_name(self, client):
+        # Custom-source field names are user-defined — anything goes.
+        body = _body(
+            "custom-x",
+            metric={"source": "custom", "field": "totally_made_up_name"},
+        )
+        resp = await client.post("/api/v1/policies", json=body)
+        assert resp.status_code == 201
+
+    async def test_custom_source_empty_field_422(self, client):
+        body = _body("custom-empty", metric={"source": "custom", "field": "  "})
+        resp = await client.post("/api/v1/policies", json=body)
+        assert resp.status_code == 422

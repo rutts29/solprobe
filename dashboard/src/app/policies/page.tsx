@@ -12,6 +12,7 @@ import {
   patchPolicy,
   deletePolicy,
   togglePolicy,
+  fetchCustomMetricNames,
 } from "@/lib/api";
 import type {
   MonitoringPolicy,
@@ -101,7 +102,7 @@ const PRESETS: PolicyPreset[] = [
   },
 ];
 
-const SOURCE_FIELDS: Record<PolicySource, string[]> = {
+const SOURCE_FIELDS: Record<Exclude<PolicySource, "custom">, string[]> = {
   gpu: [
     "gpu_temp_c",
     "gpu_utilization_pct",
@@ -161,6 +162,7 @@ export default function PoliciesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<PolicyCreate>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [customNames, setCustomNames] = useState<string[]>([]);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -254,9 +256,27 @@ export default function PoliciesPage() {
   }
 
   const sourceFieldOptions = useMemo(
-    () => SOURCE_FIELDS[form.metric.source] ?? [],
+    () =>
+      form.metric.source === "custom"
+        ? []
+        : SOURCE_FIELDS[form.metric.source] ?? [],
     [form.metric.source],
   );
+
+  useEffect(() => {
+    if (!drawerOpen || form.metric.source !== "custom") return;
+    let cancelled = false;
+    fetchCustomMetricNames(form.scope?.job_id ?? undefined)
+      .then((names) => {
+        if (!cancelled) setCustomNames(names);
+      })
+      .catch(() => {
+        if (!cancelled) setCustomNames([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerOpen, form.metric.source, form.scope?.job_id]);
 
   if (!loadedOnce) {
     return (
@@ -441,32 +461,61 @@ export default function PoliciesPage() {
                     value={form.metric.source}
                     onChange={(e) => {
                       const source = e.target.value as PolicySource;
-                      const fields = SOURCE_FIELDS[source];
+                      const initialField =
+                        source === "custom" ? "" : SOURCE_FIELDS[source][0] ?? "";
                       setForm({
                         ...form,
-                        metric: { source, field: fields[0] ?? "" },
+                        metric: { source, field: initialField },
                       });
                     }}
                   >
                     <option value="gpu">gpu</option>
                     <option value="training">training</option>
                     <option value="diloco">diloco</option>
+                    <option value="custom">custom</option>
                   </select>
                 </Field>
-                <Field label="Field">
-                  <select
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
-                    value={form.metric.field}
-                    onChange={(e) =>
-                      setForm({ ...form, metric: { ...form.metric, field: e.target.value } })
-                    }
-                  >
-                    {sourceFieldOptions.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
+                <Field label={form.metric.source === "custom" ? "Metric name" : "Field"}>
+                  {form.metric.source === "custom" ? (
+                    <>
+                      <input
+                        type="text"
+                        list="policy-custom-metric-names"
+                        placeholder="e.g. eval_bpb"
+                        className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                        value={form.metric.field}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            metric: { ...form.metric, field: e.target.value },
+                          })
+                        }
+                      />
+                      <datalist id="policy-custom-metric-names">
+                        {customNames.map((n) => (
+                          <option key={n} value={n} />
+                        ))}
+                      </datalist>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Must match the name your training script logs via
+                        <code className="ml-1 font-mono">cb.log_metric(...)</code>.
+                      </p>
+                    </>
+                  ) : (
+                    <select
+                      className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                      value={form.metric.field}
+                      onChange={(e) =>
+                        setForm({ ...form, metric: { ...form.metric, field: e.target.value } })
+                      }
+                    >
+                      {sourceFieldOptions.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </Field>
               </div>
 
