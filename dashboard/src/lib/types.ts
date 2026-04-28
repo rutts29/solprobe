@@ -178,7 +178,7 @@ export interface JobSummary {
   run_duration_ms: number;
 }
 
-export type PolicySource = "gpu" | "training" | "diloco";
+export type PolicySource = "gpu" | "training" | "diloco" | "custom";
 export type PolicyOperator =
   | "gt"
   | "gte"

@@ -67,11 +67,27 @@ def _diloco_reader(node_id: str, field: str, window_minutes: int) -> list[tuple[
     return out
 
 
-# Phase 4 (eve) registers "custom" here from app/custom_metrics.py.
+def _custom_reader(node_id: str, field: str, window_minutes: int) -> list[tuple[int, float | None, str | None]]:
+    """Read user-defined metric samples for `node_id`, where `field` is the metric name.
+
+    `CustomMetricsStore.query` returns newest-first; `_sustained_violation` walks
+    from `samples[-1]` as the latest sample, so we reverse to oldest-first.
+    """
+    limit = max(1, window_minutes * 60)
+    history = _stores.custom_metrics_store.query(
+        name=field, node_id=node_id, limit=limit
+    )
+    out: list[tuple[int, float | None, str | None]] = []
+    for m in reversed(history):
+        out.append((m.timestamp_ms, float(m.value), m.job_id or None))
+    return out
+
+
 _SOURCE_READERS: dict[str, SourceReader] = {
     "gpu": _gpu_reader,
     "training": _training_reader,
     "diloco": _diloco_reader,
+    "custom": _custom_reader,
 }
 
 _DEFAULT_WINDOW_MINUTES = 5

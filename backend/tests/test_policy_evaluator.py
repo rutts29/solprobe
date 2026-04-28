@@ -7,7 +7,7 @@ import pytest
 from app import stores as stores_mod
 from app.detectors import policy_evaluator as pe_mod
 from app.detectors.policy_evaluator import run_policy_evaluation
-from app.models.metrics import MetricsBatchModel
+from app.models.metrics import CustomMetricModel, MetricsBatchModel
 
 from tests.conftest import _make_gpu_metric, _make_training_metric
 
@@ -271,3 +271,135 @@ class TestGpuSource:
         findings = run_policy_evaluation()
         assert len(findings) == 1
         assert findings[0].alert.evidence["field"] == "gpu.fb_used_mb"
+
+
+def _mk_custom(
+    name: str,
+    value: float,
+    *,
+    job_id: str = "job-1",
+    node_id: str = "node-0",
+    ts: int,
+    step: int | None = None,
+) -> CustomMetricModel:
+    return CustomMetricModel(
+        node_id=node_id,
+        job_id=job_id,
+        timestamp_ms=ts,
+        step=step,
+        name=name,
+        value=value,
+    )
+
+
+class TestCustomSource:
+    def test_custom_threshold_triggers_critical_after_for_seconds(self, fresh_stores):
+        _ms, als, _ans, _js, _ds, _lcs, cms, pls = fresh_stores
+        pls.create(
+            _make_policy(
+                policy_id="custom-bpb",
+                source="custom",
+                field="eval_bpb",
+                operator="gt",
+                threshold=2.0,
+                for_seconds=5.0,
+                severity="CRITICAL",
+                cooldown_seconds=0,
+                # Pin scope so the evaluator visits node-0 even though we
+                # ingest no hardware/training metrics for it.
+                scope_node="node-0",
+            )
+        )
+        # 6 samples spanning 6 seconds, all above threshold.
+        for i in range(6):
+            cms.add(_mk_custom("eval_bpb", 2.5, ts=1_000_000_000 + i * 1200, step=i))
+        findings = run_policy_evaluation()
+        assert len(findings) == 1
+        alert = findings[0].alert
+        assert alert.severity == "CRITICAL"
+        assert alert.alert_type == "policy_violation"
+        assert alert.evidence["field"] == "custom.eval_bpb"
+        assert alert.evidence["operator"] == "gt"
+        assert float(alert.evidence["actual_value"]) == 2.5
+        assert float(alert.evidence["duration_seconds"]) >= 5.0
+        assert alert.job_id == "job-1"
+        assert als.count == 1
+
+    def test_custom_below_threshold_no_alert(self, fresh_stores):
+        _ms, als, _ans, _js, _ds, _lcs, cms, pls = fresh_stores
+        pls.create(
+            _make_policy(
+                policy_id="custom-bpb",
+                source="custom",
+                field="eval_bpb",
+                operator="gt",
+                threshold=2.0,
+                for_seconds=0.0,
+                cooldown_seconds=0,
+                scope_node="node-0",
+            )
+        )
+        for i in range(3):
+            cms.add(_mk_custom("eval_bpb", 1.5, ts=1_000_000_000 + i * 1000))
+        findings = run_policy_evaluation()
+        assert findings == []
+        assert als.count == 0
+
+    def test_custom_for_seconds_not_satisfied(self, fresh_stores):
+        _ms, _als, _ans, _js, _ds, _lcs, cms, pls = fresh_stores
+        pls.create(
+            _make_policy(
+                policy_id="custom-bpb",
+                source="custom",
+                field="eval_bpb",
+                operator="gt",
+                threshold=2.0,
+                for_seconds=10.0,
+                cooldown_seconds=0,
+                scope_node="node-0",
+            )
+        )
+        # 3 samples spanning ~2 seconds — below for_seconds.
+        for i in range(3):
+            cms.add(_mk_custom("eval_bpb", 2.5, ts=1_000_000_000 + i * 1000))
+        findings = run_policy_evaluation()
+        assert findings == []
+
+    def test_custom_job_scope_filters(self, fresh_stores):
+        _ms, _als, _ans, _js, _ds, _lcs, cms, pls = fresh_stores
+        pls.create(
+            _make_policy(
+                policy_id="custom-bpb",
+                source="custom",
+                field="eval_bpb",
+                operator="gt",
+                threshold=1.0,
+                for_seconds=0.0,
+                cooldown_seconds=0,
+                scope_node="node-0",
+                scope_job="other-job",
+            )
+        )
+        # All samples carry job_id="job-1" — scoped policy should not match.
+        for i in range(3):
+            cms.add(_mk_custom("eval_bpb", 5.0, ts=1_000_000_000 + i * 1000))
+        findings = run_policy_evaluation()
+        assert findings == []
+
+    def test_custom_unknown_metric_no_alert(self, fresh_stores):
+        _ms, _als, _ans, _js, _ds, _lcs, cms, pls = fresh_stores
+        pls.create(
+            _make_policy(
+                policy_id="custom-bpb",
+                source="custom",
+                field="not_logged_yet",
+                operator="gt",
+                threshold=0.0,
+                for_seconds=0.0,
+                cooldown_seconds=0,
+                scope_node="node-0",
+            )
+        )
+        cms.add(_mk_custom("eval_bpb", 5.0, ts=1_000_000_000))
+        findings = run_policy_evaluation()
+        assert findings == []
