@@ -2,11 +2,28 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 
+type AnchorAccount<T> = { fetch(address: anchor.web3.PublicKey): Promise<T> };
+type StakeConfig = {
+  minStakeLamports: anchor.BN;
+  slashPercentage: number;
+  admin: anchor.web3.PublicKey;
+};
+type StakeAccount = {
+  stakedLamports: anchor.BN;
+  active: boolean;
+  slashCount: number;
+};
+type StakingAccounts = {
+  stakeConfig: AnchorAccount<StakeConfig>;
+  stakeAccount: AnchorAccount<StakeAccount>;
+};
+
 describe("solprobe-staking", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.SolprobeStaking as Program;
+  const accounts = program.account as unknown as StakingAccounts;
   const admin = provider.wallet;
 
   const minStake = new anchor.BN(1_000_000_000); // 1 SOL
@@ -23,7 +40,7 @@ describe("solprobe-staking", () => {
       [Buffer.from("stake_config")],
       program.programId
     );
-    const config = await program.account.stakeConfig.fetch(configPda);
+    const config = await accounts.stakeConfig.fetch(configPda);
     assert.equal(config.minStakeLamports.toNumber(), 1_000_000_000);
     assert.equal(config.slashPercentage, 10);
     assert.ok(config.admin.equals(admin.publicKey));
@@ -38,7 +55,7 @@ describe("solprobe-staking", () => {
       [Buffer.from("stake_account"), admin.publicKey.toBuffer()],
       program.programId
     );
-    const stake = await program.account.stakeAccount.fetch(stakePda);
+    const stake = await accounts.stakeAccount.fetch(stakePda);
     assert.equal(stake.stakedLamports.toNumber(), 2_000_000_000);
     assert.equal(stake.active, true);
     assert.equal(stake.slashCount, 0);
@@ -97,7 +114,7 @@ describe("solprobe-staking", () => {
       [Buffer.from("stake_account"), admin.publicKey.toBuffer()],
       program.programId
     );
-    const stake = await program.account.stakeAccount.fetch(stakePda);
+    const stake = await accounts.stakeAccount.fetch(stakePda);
     assert.equal(stake.stakedLamports.toNumber(), 1_500_000_000);
     assert.equal(stake.slashCount, 1);
     assert.equal(stake.active, true);

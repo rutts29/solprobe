@@ -134,8 +134,9 @@ def fresh_stores(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture()
-def test_app(fresh_stores):
+def test_app(fresh_stores, monkeypatch: pytest.MonkeyPatch):
     """Create a minimal FastAPI app for testing (no gRPC/background tasks)."""
+    monkeypatch.setenv("SOLPROBE_API_KEY", "test-secret")
     ms, als, ans, js, ds, lcs, cms, pls = fresh_stores
 
     # Patch stores used by routes and enrichment
@@ -190,5 +191,9 @@ async def client(test_app):
     """Async HTTP test client."""
     app, *_ = test_app
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-SolProbe-API-Key": "test-secret"},
+    ) as ac:
         yield ac

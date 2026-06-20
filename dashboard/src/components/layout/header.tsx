@@ -37,23 +37,23 @@ export function Header({ wsConnected, criticalAlerts }: HeaderProps) {
   const healthLabel = criticalAlerts > 0 ? `${criticalAlerts} Critical` : "Healthy";
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-card/80 px-6 backdrop-blur-sm">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b bg-card/80 px-4 backdrop-blur-sm md:px-6">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex min-w-0 items-center gap-2 text-sm">
         <Link href="/" className="text-muted-foreground transition-colors hover:text-foreground">
           SolProbe
         </Link>
         {crumbs.map((c) => (
-          <span key={c.href} className="flex items-center gap-2">
+          <span key={c.href} className="flex min-w-0 items-center gap-2">
             <span className="text-muted-foreground">/</span>
-            <span className="font-medium">{c.label}</span>
+            <span className="truncate font-medium">{c.label}</span>
           </span>
         ))}
       </div>
 
-      <div className="flex flex-1 items-center justify-end gap-3">
+      <div className="flex flex-1 items-center justify-end gap-2 md:gap-3">
         {/* ⌘K search */}
-        <button className="flex h-8 items-center gap-2 rounded-md border bg-background px-3 text-xs text-muted-foreground hover:text-foreground">
+        <button className="hidden h-8 items-center gap-2 rounded-md border bg-background px-3 text-xs text-muted-foreground hover:text-foreground lg:flex">
           <Search className="h-3.5 w-3.5" />
           <span>Search nodes, alerts…</span>
           <kbd className="ml-2 rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>

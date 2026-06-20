@@ -15,6 +15,7 @@
 #   SIDECAR_METRICS_PORT (default 9100)
 #   GRPC_PORT          (default 50051)
 #   NODE_ID            (default node-0)
+#   SOLPROBE_API_KEY   (default solprobe-demo-key)
 #   SOLPROBE_DEMO_TRAIN  set to 1 to launch patched nanochat smoke training
 #   NANOCHAT_DIR       (default .worktrees/nanochat-solprobe)
 #   SOLPROBE_MMAP_DIR  (default .runs/<run_id>/mmap)
@@ -37,6 +38,7 @@ DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
 SIDECAR_METRICS_PORT="${SIDECAR_METRICS_PORT:-9100}"
 GRPC_PORT="${GRPC_PORT:-50051}"
 NODE_ID="${NODE_ID:-node-0}"
+SOLPROBE_API_KEY="${SOLPROBE_API_KEY:-solprobe-demo-key}"
 
 RUN_ID="nanochat-$(date +%s)"
 while [ $# -gt 0 ]; do
@@ -143,7 +145,7 @@ else
     # shellcheck disable=SC1091
     source "$PROJECT_ROOT/backend/.venv/bin/activate"
     cd "$PROJECT_ROOT/backend"
-    LOG_LEVEL=debug uvicorn app.main:app \
+    SOLPROBE_API_KEY="$SOLPROBE_API_KEY" LOG_LEVEL=debug uvicorn app.main:app \
       --host 127.0.0.1 \
       --port "$BACKEND_PORT" \
       --log-level debug \
@@ -172,7 +174,9 @@ else
   fi
   (
     cd "$PROJECT_ROOT/dashboard"
-    PORT="$DASHBOARD_PORT" npm run dev > "$LOG_DIR/dashboard.log" 2>&1
+    NEXT_PUBLIC_API_URL="http://127.0.0.1:${BACKEND_PORT}" \
+      NEXT_PUBLIC_WS_URL="ws://127.0.0.1:${BACKEND_PORT}/ws/stream" \
+      PORT="$DASHBOARD_PORT" npm run dev > "$LOG_DIR/dashboard.log" 2>&1
   ) &
   DASHBOARD_PID=$!
   # Next dev server can take a while on first compile.
@@ -234,6 +238,7 @@ EOF
 )
 if curl -sf -X POST "http://127.0.0.1:${BACKEND_PORT}/api/v1/jobs" \
   -H 'Content-Type: application/json' \
+  -H "X-SolProbe-API-Key: ${SOLPROBE_API_KEY}" \
   -d "$JOB_BODY" > "$LOG_DIR/job_register.json"; then
   ok "Job registered: $RUN_ID"
 else
@@ -252,6 +257,7 @@ if [ "${SOLPROBE_DEMO_TRAIN:-0}" = "1" ]; then
   fi
   curl -sf -X PATCH "http://127.0.0.1:${BACKEND_PORT}/api/v1/jobs/${RUN_ID}/status" \
     -H 'Content-Type: application/json' \
+    -H "X-SolProbe-API-Key: ${SOLPROBE_API_KEY}" \
     -d '{"status":"running"}' > "$LOG_DIR/job_status_running.json" || true
   (
     cd "$NANOCHAT_DIR"
@@ -276,6 +282,7 @@ ${GREEN}SolProbe demo running.${NC}
   logs    = $LOG_DIR
   mmap    = $SOLPROBE_MMAP_DIR
   nanochat= $NANOCHAT_DIR
+  api_key = $SOLPROBE_API_KEY
 
   http://localhost:${DASHBOARD_PORT}/overview
   http://localhost:${DASHBOARD_PORT}/training

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { SeverityBadge } from "./severity-badge";
 import { LifecycleActions } from "./lifecycle-actions";
 import { Badge } from "@/components/ui/badge";
@@ -178,9 +179,7 @@ export function AlertDetail({ alert, onClose, initialDiagnosis = null, onLifecyc
         ) : (
           <div className="space-y-2">
             {requestError && (
-              <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                {requestError}
-              </div>
+              <ErrorBanner title="Diagnosis request failed" message={requestError} />
             )}
             {diagnosisNotFound && (
               <Button onClick={handleRequestDiagnosis} disabled={requesting}>

@@ -1,19 +1,18 @@
-// REPLACE: dashboard/src/app/alerts/page.tsx — adds <SeveritySummary>.
-// Filters, AlertTimeline, AlertDetail unchanged.
-
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
 import { AlertTimeline } from "@/components/alerts/alert-timeline";
 import { AlertDetail } from "@/components/alerts/alert-detail";
 import { SeveritySummary } from "@/components/alerts/severity-summary";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { PageHeader } from "@/components/ui/page-header";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAlerts } from "@/hooks/use-alerts";
+import { Toolbar } from "@/components/ui/toolbar";
+import { useAlerts, useDiagnoses } from "@/hooks/use-alerts";
 import { useWebSocket } from "@/lib/websocket";
 import { useRealtime } from "@/hooks/use-realtime";
 import type { AlertLifecycle, AlertModel, DiagnosisResult } from "@/lib/types";
-
-const SEVERITIES = ["ALL", "CRITICAL", "WARNING", "INFO"] as const;
 
 const CLOSED_LIFECYCLE_STATES = new Set(["resolved", "ignored"]);
 
@@ -27,6 +26,7 @@ export default function AlertsPage() {
   const [selectedAlert, setSelectedAlert] = useState<AlertModel | null>(null);
   const [selectedDiagnosis, setSelectedDiagnosis] = useState<DiagnosisResult | null>(null);
   const { alerts, loading, error, refresh, prepend, updateLifecycle } = useAlerts({ limit: 100 });
+  const { diagnoses, append: appendDiagnosis } = useDiagnoses({ limit: 100 });
   const ws = useWebSocket();
 
   const onAlert = useCallback(
@@ -37,11 +37,12 @@ export default function AlertsPage() {
   );
   const onDiagnosis = useCallback(
     (msg: { type: "diagnosis"; data: DiagnosisResult }) => {
+      appendDiagnosis(msg.data);
       if (selectedAlert?.alert_id === msg.data.alert_id) {
         setSelectedDiagnosis(msg.data);
       }
     },
-    [selectedAlert?.alert_id]
+    [appendDiagnosis, selectedAlert?.alert_id]
   );
   useRealtime(ws.subscribe, { onAlert, onDiagnosis });
 
@@ -83,45 +84,40 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Alerts</h1>
-      </div>
+      <PageHeader
+        title="Alerts"
+        eyebrow="Monitoring"
+        subtitle="Edge and central-detector alerts across the cluster, in real time. Acknowledge, suppress, or send to diagnosis."
+        meta={[
+          { tone: "crit", children: `${alerts.filter((a) => a.severity === "CRITICAL").length} critical` },
+          { tone: "warn", children: `${alerts.filter((a) => a.severity === "WARNING").length} warning` },
+          { tone: "info", children: `${alerts.filter((a) => a.severity === "INFO").length} info` },
+        ]}
+      />
 
-      {error && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-          {error}
-          <button onClick={refresh} className="ml-2 underline">Retry</button>
-        </div>
-      )}
+      {error && <ErrorBanner title="Couldn't load alerts" message={error} onRetry={refresh} />}
 
       <SeveritySummary alerts={alerts} />
 
-      <div className="flex flex-wrap items-center gap-2">
-        {SEVERITIES.map((s) => (
-          <button
-            key={s}
-            onClick={() => selectSeverity(s)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              severity === s
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+      <Toolbar>
+        <SegmentedControl<string>
+          value={severity}
+          onChange={selectSeverity}
+          options={[
+            { value: "ALL", label: "All" },
+            { value: "CRITICAL", label: "Crit" },
+            { value: "WARNING", label: "Warn" },
+            { value: "INFO", label: "Info" },
+          ]}
+        />
         <button
           onClick={() => setOpenOnly((v) => !v)}
           aria-pressed={openOnly}
-          className={`ml-auto rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            openOnly
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:text-foreground"
-          }`}
+          className={`ml-auto inline-flex h-8 items-center gap-2 rounded-md border px-2.5 text-xs font-medium transition-colors ${openOnly ? "border-primary/40 bg-primary/10 text-primary" : "bg-background text-muted-foreground hover:text-foreground"}`}
         >
-          Open incidents
+          Open incidents only
         </button>
-      </div>
+      </Toolbar>
 
       {loading ? (
         <div className="space-y-2">
@@ -130,6 +126,7 @@ export default function AlertsPage() {
       ) : (
         <AlertTimeline
           alerts={filteredAlerts}
+          diagnoses={diagnoses}
           onSelectAlert={selectAlert}
           onDiagnosisCreated={handleDiagnosisCreated}
         />

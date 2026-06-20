@@ -4,8 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { PageHeader } from "@/components/ui/page-header";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatTimestamp } from "@/lib/utils";
+import type { ReactNode } from "react";
 import {
   fetchPolicies,
   createPolicy,
@@ -281,29 +287,109 @@ export default function PoliciesPage() {
   if (!loadedOnce) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Policies</h1>
+        <PageHeader
+          title="Monitoring policies"
+          eyebrow="Monitoring"
+          subtitle="User-defined thresholds over training and hardware metrics. Violations raise alerts."
+        />
         <Skeleton className="h-64 w-full" />
       </div>
     );
   }
 
+  const policyColumns: DataTableColumn<MonitoringPolicy>[] = [
+    {
+      key: "name",
+      header: "Name",
+      cell: (p) => (
+        <>
+          <button
+            className="text-left font-medium hover:underline"
+            onClick={() => openEditDrawer(p)}
+          >
+            {p.name}
+          </button>
+          <div className="font-mono text-xs text-muted-foreground">{p.policy_id}</div>
+        </>
+      ),
+    },
+    {
+      key: "source",
+      header: "Source",
+      cell: (p) => <span className="font-mono text-xs">{p.metric.source}</span>,
+    },
+    {
+      key: "field",
+      header: "Field",
+      cell: (p) => <span className="font-mono text-xs">{p.metric.field}</span>,
+    },
+    {
+      key: "condition",
+      header: "Condition",
+      cell: (p) => (
+        <span className="font-mono text-xs">
+          {p.condition.operator === "stale_for"
+            ? `unchanged for ${p.condition.for_seconds}s`
+            : `${p.condition.operator} ${p.condition.threshold}${p.condition.for_seconds > 0 ? ` for ${p.condition.for_seconds}s` : ""}`}
+        </span>
+      ),
+    },
+    {
+      key: "severity",
+      header: "Severity",
+      cell: (p) => <Badge variant={severityVariant(p.severity)}>{p.severity}</Badge>,
+    },
+    {
+      key: "last-triggered",
+      header: "Last triggered",
+      cell: (p) => (
+        <span className="text-xs text-muted-foreground">
+          {p.last_triggered_at_ms ? formatTimestamp(p.last_triggered_at_ms) : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "enabled",
+      header: "Enabled",
+      cell: (p) => (
+        <button
+          onClick={() => handleToggle(p.policy_id)}
+          className={`rounded-md border px-2 py-1 text-xs ${
+            p.enabled
+              ? "border-green-500/30 bg-green-500/10 text-green-400"
+              : "border-border bg-muted text-muted-foreground"
+          }`}
+        >
+          {p.enabled ? "on" : "off"}
+        </button>
+      ),
+    },
+    {
+      key: "delete",
+      header: "",
+      align: "right",
+      cell: (p) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleDelete(p.policy_id)}
+        >
+          Delete
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Monitoring policies</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            User-defined thresholds over training and hardware metrics. Violations raise alerts.
-          </p>
-        </div>
-        <Button onClick={() => openCreateDrawer()}>New policy</Button>
-      </div>
+      <PageHeader
+        title="Monitoring policies"
+        eyebrow="Monitoring"
+        subtitle="User-defined thresholds over training and hardware metrics. Violations raise alerts."
+        actions={<Button onClick={() => openCreateDrawer()}>New policy</Button>}
+      />
 
-      {error && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner title="Policy request failed" message={error} />}
 
       <Card>
         <CardHeader>
@@ -337,79 +423,13 @@ export default function PoliciesPage() {
         </CardHeader>
         <CardContent>
           {policies.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No policies yet. Click a preset above or create one.</p>
+            <EmptyState title="No policies yet" description="Click a preset above or create a custom monitoring policy." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <tr className="border-b">
-                    <th className="py-2 pr-3">Name</th>
-                    <th className="py-2 pr-3">Source</th>
-                    <th className="py-2 pr-3">Field</th>
-                    <th className="py-2 pr-3">Condition</th>
-                    <th className="py-2 pr-3">Severity</th>
-                    <th className="py-2 pr-3">Last triggered</th>
-                    <th className="py-2 pr-3">Enabled</th>
-                    <th className="py-2 pr-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {policies.map((p) => (
-                    <tr key={p.policy_id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-3">
-                        <button
-                          className="font-medium text-left hover:underline"
-                          onClick={() => openEditDrawer(p)}
-                        >
-                          {p.name}
-                        </button>
-                        <div className="text-xs font-mono text-muted-foreground">{p.policy_id}</div>
-                      </td>
-                      <td className="py-2 pr-3 font-mono text-xs">{p.metric.source}</td>
-                      <td className="py-2 pr-3 font-mono text-xs">{p.metric.field}</td>
-                      <td className="py-2 pr-3 font-mono text-xs">
-                        {p.condition.operator === "stale_for"
-                          ? `unchanged for ${p.condition.for_seconds}s`
-                          : `${p.condition.operator} ${p.condition.threshold}${
-                              p.condition.for_seconds > 0
-                                ? ` for ${p.condition.for_seconds}s`
-                                : ""
-                            }`}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <Badge variant={severityVariant(p.severity)}>{p.severity}</Badge>
-                      </td>
-                      <td className="py-2 pr-3 text-xs text-muted-foreground">
-                        {p.last_triggered_at_ms
-                          ? formatTimestamp(p.last_triggered_at_ms)
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-3">
-                        <button
-                          onClick={() => handleToggle(p.policy_id)}
-                          className={`text-xs px-2 py-1 rounded-md border ${
-                            p.enabled
-                              ? "bg-green-500/10 border-green-500/30 text-green-400"
-                              : "bg-muted border-border text-muted-foreground"
-                          }`}
-                        >
-                          {p.enabled ? "on" : "off"}
-                        </button>
-                      </td>
-                      <td className="py-2 pr-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(p.policy_id)}
-                        >
-                          Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={policyColumns}
+              rows={policies}
+              rowKey={(policy) => policy.policy_id}
+            />
           )}
         </CardContent>
       </Card>
@@ -438,7 +458,7 @@ export default function PoliciesPage() {
               <Field label="Policy ID">
                 <input
                   type="text"
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                  className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
                   value={form.policy_id}
                   disabled={!!editingId}
                   onChange={(e) => setForm({ ...form, policy_id: e.target.value })}
@@ -448,7 +468,7 @@ export default function PoliciesPage() {
               <Field label="Name">
                 <input
                   type="text"
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  className="h-8 w-full rounded-md border bg-background px-2.5 text-sm"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
@@ -456,8 +476,8 @@ export default function PoliciesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Source">
-                  <select
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  <Select
+                    className="w-full"
                     value={form.metric.source}
                     onChange={(e) => {
                       const source = e.target.value as PolicySource;
@@ -473,7 +493,7 @@ export default function PoliciesPage() {
                     <option value="training">training</option>
                     <option value="diloco">diloco</option>
                     <option value="custom">custom</option>
-                  </select>
+                  </Select>
                 </Field>
                 <Field label={form.metric.source === "custom" ? "Metric name" : "Field"}>
                   {form.metric.source === "custom" ? (
@@ -482,7 +502,7 @@ export default function PoliciesPage() {
                         type="text"
                         list="policy-custom-metric-names"
                         placeholder="e.g. eval_bpb"
-                        className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                        className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
                         value={form.metric.field}
                         onChange={(e) =>
                           setForm({
@@ -502,8 +522,8 @@ export default function PoliciesPage() {
                       </p>
                     </>
                   ) : (
-                    <select
-                      className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    <Select
+                      className="w-full font-mono"
                       value={form.metric.field}
                       onChange={(e) =>
                         setForm({ ...form, metric: { ...form.metric, field: e.target.value } })
@@ -514,14 +534,14 @@ export default function PoliciesPage() {
                           {f}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   )}
                 </Field>
               </div>
 
               <Field label="Operator">
-                <select
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                <Select
+                  className="w-full"
                   value={form.condition.operator}
                   onChange={(e) =>
                     setForm({
@@ -535,7 +555,7 @@ export default function PoliciesPage() {
                       {o.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
 
               {form.condition.operator !== "stale_for" && (
@@ -543,7 +563,7 @@ export default function PoliciesPage() {
                   <input
                     type="number"
                     step="any"
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
                     value={form.condition.threshold}
                     onChange={(e) =>
                       setForm({
@@ -560,7 +580,7 @@ export default function PoliciesPage() {
                   type="number"
                   step="1"
                   min="0"
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                  className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
                   value={form.condition.for_seconds}
                   onChange={(e) =>
                     setForm({
@@ -573,8 +593,8 @@ export default function PoliciesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Severity">
-                  <select
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  <Select
+                    className="w-full"
                     value={form.severity}
                     onChange={(e) =>
                       setForm({ ...form, severity: e.target.value as PolicySeverity })
@@ -585,14 +605,14 @@ export default function PoliciesPage() {
                         {s}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </Field>
                 <Field label="Cooldown (seconds)">
                   <input
                     type="number"
                     min="0"
                     step="1"
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
                     value={form.cooldown_seconds}
                     onChange={(e) =>
                       setForm({ ...form, cooldown_seconds: parseFloat(e.target.value) || 0 })
@@ -606,7 +626,7 @@ export default function PoliciesPage() {
                   <input
                     type="text"
                     placeholder="(any)"
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
                     value={form.scope?.node_id ?? ""}
                     onChange={(e) =>
                       setForm({
@@ -623,7 +643,7 @@ export default function PoliciesPage() {
                   <input
                     type="text"
                     placeholder="(any)"
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm font-mono"
+                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
                     value={form.scope?.job_id ?? ""}
                     onChange={(e) =>
                       setForm({
@@ -641,7 +661,7 @@ export default function PoliciesPage() {
               <Field label="Description">
                 <textarea
                   rows={2}
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
                   value={form.description ?? ""}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
@@ -663,7 +683,7 @@ export default function PoliciesPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="space-y-1">
       <label className="text-xs uppercase tracking-wider text-muted-foreground">{label}</label>

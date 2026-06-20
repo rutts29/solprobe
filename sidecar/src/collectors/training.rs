@@ -24,6 +24,7 @@ pub struct TrainingMetricsReader {
 }
 
 impl TrainingMetricsReader {
+    #[cfg(test)]
     pub fn new(node_id: String) -> Self {
         Self::with_mmap_dir(node_id, PathBuf::from("/tmp"))
     }

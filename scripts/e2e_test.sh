@@ -17,6 +17,7 @@ BACKEND_PORT=8000
 GRPC_PORT=50051
 SIDECAR_METRICS_PORT=9100
 NODE_ID="node-0"
+SOLPROBE_API_KEY="${SOLPROBE_API_KEY:-solprobe-e2e-key}"
 
 BACKEND_PID=""
 SIDECAR_PID=""
@@ -87,7 +88,7 @@ log "Starting backend on port $BACKEND_PORT..."
 (
   # shellcheck disable=SC1091
   source "$PROJECT_ROOT/backend/.venv/bin/activate"
-  uvicorn app.main:app --host 127.0.0.1 --port "$BACKEND_PORT" --app-dir "$PROJECT_ROOT/backend" \
+  SOLPROBE_API_KEY="$SOLPROBE_API_KEY" uvicorn app.main:app --host 127.0.0.1 --port "$BACKEND_PORT" --app-dir "$PROJECT_ROOT/backend" \
     > /tmp/solprobe_e2e_backend.log 2>&1
 ) &
 BACKEND_PID=$!
@@ -154,7 +155,7 @@ fi
 # Step 5: Assert nodes endpoint returns node-0
 # ------------------------------------------------------------------
 log "Checking nodes endpoint..."
-NODES_JSON=$(curl -sf "http://127.0.0.1:${BACKEND_PORT}/api/v1/nodes" 2>/dev/null || echo "[]")
+NODES_JSON=$(curl -sf -H "X-SolProbe-API-Key: ${SOLPROBE_API_KEY}" "http://127.0.0.1:${BACKEND_PORT}/api/v1/nodes" 2>/dev/null || echo "[]")
 NODE_COUNT=$(echo "$NODES_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
 if [ "$NODE_COUNT" -gt 0 ] 2>/dev/null; then
   pass "Nodes: $NODE_COUNT node(s) registered (>= 1)"
@@ -217,7 +218,7 @@ log "Waiting 5 seconds for fault alerts..."
 sleep 5
 
 log "Checking alerts endpoint for CRITICAL thermal_throttle alerts..."
-ALERTS_JSON=$(curl -sf "http://127.0.0.1:${BACKEND_PORT}/api/v1/alerts?severity=CRITICAL" 2>/dev/null || echo "[]")
+ALERTS_JSON=$(curl -sf -H "X-SolProbe-API-Key: ${SOLPROBE_API_KEY}" "http://127.0.0.1:${BACKEND_PORT}/api/v1/alerts?severity=CRITICAL" 2>/dev/null || echo "[]")
 CRITICAL_COUNT=$(echo "$ALERTS_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
 if [ "$CRITICAL_COUNT" -gt 0 ] 2>/dev/null; then
   pass "Alerts: $CRITICAL_COUNT CRITICAL alert(s) found (>= 1)"
@@ -225,7 +226,7 @@ else
   fail "Alerts: $CRITICAL_COUNT CRITICAL alerts (expected >= 1)"
   # Show all alerts for debugging
   log "All alerts:"
-  curl -sf "http://127.0.0.1:${BACKEND_PORT}/api/v1/alerts" 2>/dev/null | python3 -m json.tool 2>/dev/null | head -30 || true
+  curl -sf -H "X-SolProbe-API-Key: ${SOLPROBE_API_KEY}" "http://127.0.0.1:${BACKEND_PORT}/api/v1/alerts" 2>/dev/null | python3 -m json.tool 2>/dev/null | head -30 || true
 fi
 
 # Check that at least one alert is thermal_throttle type

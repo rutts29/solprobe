@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
@@ -63,7 +65,6 @@ pub mod solprobe_escrow {
         Ok(())
     }
 
-    // NOTE: Worker self-release is demo-scope; production would require oracle/creator approval.
     pub fn release_payment(ctx: Context<ReleasePayment>, _job_id: String) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow_job;
         require!(escrow.status == JobStatus::Active, EscrowError::JobNotActive);
@@ -245,6 +246,7 @@ pub struct ReleasePayment<'info> {
         mut,
         seeds = [b"escrow_job", job_id.as_bytes()],
         bump = escrow_job.bump,
+        has_one = creator,
     )]
     pub escrow_job: Account<'info, EscrowJob>,
 
@@ -257,7 +259,10 @@ pub struct ReleasePayment<'info> {
     pub vault: SystemAccount<'info>,
 
     #[account(mut)]
-    pub worker: Signer<'info>,
+    pub worker: SystemAccount<'info>,
+
+    #[account(mut)]
+    pub creator: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

@@ -60,6 +60,85 @@ class TestNodesEndpoint:
         assert len(data["training_metrics"]) == 10
 
 
+class TestMetricsBatchEndpoint:
+    async def test_post_training_only_batch_ingests_colab_metrics(self, test_app, client):
+        _, ms, *_ = test_app
+
+        body = {
+            "training": {
+                "node_id": "colab-t4-0",
+                "job_id": "colab-demo",
+                "timestamp_ms": 1_700_000_000_000,
+                "step": 12,
+                "loss": 1.25,
+                "gradient_norm": 0.75,
+                "learning_rate": 0.0003,
+                "throughput_tps": 2048.0,
+                "mfu_pct": 18.5,
+            }
+        }
+        resp = await client.post("/api/v1/metrics/batches", json=body)
+
+        assert resp.status_code == 201
+        assert resp.json() == {"accepted": 1}
+        status = ms.get_node_status("colab-t4-0")
+        assert status is not None
+        assert status.latest_training is not None
+        assert status.latest_training.step == 12
+        assert status.gpu_model == ""
+
+    async def test_post_metrics_batch_marks_registered_job_running(self, test_app, client):
+        _, _ms, _als, _ans, js, *_ = test_app
+        js.register("colab-demo", {"platform": "colab"}, ["colab-t4-0"])
+
+        resp = await client.post(
+            "/api/v1/metrics/batches",
+            json={
+                "training": {
+                    "node_id": "colab-t4-0",
+                    "job_id": "colab-demo",
+                    "timestamp_ms": 1_700_000_000_000,
+                    "step": 1,
+                    "loss": 2.0,
+                }
+            },
+        )
+
+        assert resp.status_code == 201
+        assert js.get("colab-demo")["status"] == "running"
+
+    async def test_post_list_of_metrics_batches(self, test_app, client):
+        _, ms, *_ = test_app
+
+        resp = await client.post(
+            "/api/v1/metrics/batches",
+            json=[
+                {
+                    "training": {
+                        "node_id": "colab-t4-0",
+                        "job_id": "colab-demo",
+                        "timestamp_ms": 1_700_000_000_000,
+                        "step": 1,
+                        "loss": 2.0,
+                    }
+                },
+                {
+                    "training": {
+                        "node_id": "colab-t4-0",
+                        "job_id": "colab-demo",
+                        "timestamp_ms": 1_700_000_001_000,
+                        "step": 2,
+                        "loss": 1.9,
+                    }
+                },
+            ],
+        )
+
+        assert resp.status_code == 201
+        assert resp.json() == {"accepted": 2}
+        assert ms.get_node_status("colab-t4-0").latest_training.step == 2
+
+
 class TestAlertsEndpoint:
     async def test_empty_alerts(self, client):
         resp = await client.get("/api/v1/alerts")

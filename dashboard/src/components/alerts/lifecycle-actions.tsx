@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ErrorBanner } from "@/components/ui/error-banner";
 import { patchAlertState, postAlertNote } from "@/lib/api";
 import { formatTimestamp } from "@/lib/utils";
 import type { AlertLifecycle, AlertLifecycleState } from "@/lib/types";
@@ -96,9 +97,7 @@ export function LifecycleActions({ alertId, lifecycle, onChange }: LifecycleActi
         </div>
 
         {error && (
-          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400">
-            {error}
-          </div>
+          <ErrorBanner title="Lifecycle update failed" message={error} />
         )}
 
         <div className="space-y-2">

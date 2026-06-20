@@ -1,7 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import type { WebSocketMessage, AlertModel, NodeStatus, DiagnosisResult } from "./types";
+import { withApiKey } from "./auth";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || `${typeof window !== "undefined" ? (window.location.protocol === "https:" ? "wss:" : "ws:") + "//" + window.location.host : "ws://localhost:3000"}/ws/stream`;
 const MAX_RECONNECT_DELAY = 30000;
@@ -47,6 +49,7 @@ function useWebSocketInternal(): WebSocketContextValue {
   const reconnectDelay = useRef(1000);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const listenersRef = useRef<Set<(msg: WebSocketMessage) => void>>(new Set());
+  const { apiKey, loaded, isAuthenticated } = useAuth();
 
   const subscribe = useCallback((listener: (msg: WebSocketMessage) => void) => {
     listenersRef.current.add(listener);
@@ -57,8 +60,8 @@ function useWebSocketInternal(): WebSocketContextValue {
     let unmounted = false;
 
     function connect() {
-      if (unmounted) return;
-      const ws = new WebSocket(WS_URL);
+      if (unmounted || !loaded || !isAuthenticated || !apiKey) return;
+      const ws = new WebSocket(withApiKey(WS_URL));
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -76,10 +79,10 @@ function useWebSocketInternal(): WebSocketContextValue {
         }, reconnectDelay.current);
       };
 
-      ws.onerror = (event) => {
+      ws.onerror = () => {
         // Don't call ws.close() — browser fires onclose automatically after onerror.
         // Explicit close() triggers a second onclose, creating duplicate reconnect timers.
-        console.error("[WebSocket] error:", event);
+        console.debug("[WebSocket] connection error; waiting for close/reconnect");
       };
 
       ws.onmessage = (event) => {
@@ -132,7 +135,7 @@ function useWebSocketInternal(): WebSocketContextValue {
       clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };
-  }, []);
+  }, [apiKey, isAuthenticated, loaded]);
 
   return { ...state, subscribe };
 }

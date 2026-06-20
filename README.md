@@ -93,7 +93,7 @@ solprobe/
     app/diagnosis/  LLM diagnosis agent (Claude API, recovery actions)
   dashboard/        Next.js 15 real-time dashboard (Tailwind, Recharts)
   solana/           4 Anchor programs (anchor-lang 0.32.1)
-  training/         PyTorch callbacks + standalone simulator
+  training/         PyTorch callbacks + Colab REST client + simulator
   proto/            Shared Protobuf schemas
   infra/            Helm chart, Terraform (GKE), Ansible, Grafana
   scripts/          E2E test, deploy/teardown scripts
@@ -107,23 +107,31 @@ solprobe/
 - protoc (`brew install protobuf`)
 - Solana CLI 3.x + Anchor CLI 0.30.1 (with anchor-lang 0.32.1) (for Solana programs)
 
-### 1. Backend
+### 1. One-command demo
+
+```bash
+make demo
+# Open http://localhost:3000 and sign in with solprobe-demo-key
+```
+
+### 2. Backend
 
 ```bash
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+export SOLPROBE_API_KEY="solprobe-demo-key"
 uvicorn app.main:app --port 8000
 ```
 
-### 2. Sidecar (Simulation Mode)
+### 3. Sidecar (Simulation Mode)
 
 ```bash
 cd sidecar
 cargo run -- --simulate --node-id node-0
 ```
 
-### 3. Dashboard
+### 4. Dashboard
 
 ```bash
 cd dashboard
@@ -131,14 +139,21 @@ npm install && npm run dev
 # Open http://localhost:3000
 ```
 
-### 4. LLM Diagnosis (Optional)
+### 5. Google Colab T4 Demo
+
+The dashboard includes a bundled notebook at `/colab/solprobe_colab_t4_demo.ipynb`.
+Expose the backend on a public URL, open the notebook in Colab, select a T4 runtime, set `BACKEND_URL` and `API_KEY`, and run all cells. The notebook trains a tiny PyTorch model and streams GPU/training telemetry over REST to `/api/v1/metrics/batches`.
+
+See `docs/colab.md` for the full flow.
+
+### 6. LLM Diagnosis (Optional)
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 # Restart backend — auto-diagnosis loop activates for CRITICAL alerts
 ```
 
-### 5. Fault Injection
+### 7. Fault Injection
 
 ```bash
 cd sidecar
@@ -147,7 +162,7 @@ cargo run -- --simulate --node-id node-0 --inject-fault thermal_throttle
 #                   nccl_timeout, memory_pressure
 ```
 
-### 6. Solana Programs
+### 8. Solana Programs
 
 ```bash
 cd solana
@@ -155,7 +170,7 @@ anchor build
 anchor test  # runs on localnet
 ```
 
-### 7. E2E Integration Test
+### 9. E2E Integration Test
 
 ```bash
 ./scripts/e2e_test.sh
@@ -166,11 +181,12 @@ anchor test  # runs on localnet
 
 | Component | Tests | Command |
 |-----------|-------|---------|
-| Rust sidecar | 28 | `cd sidecar && cargo test` |
-| Python backend | 132 | `cd backend && python -m pytest tests/ -v` |
-| Solana programs | 19 | `cd solana && anchor test` |
+| Rust sidecar | 32 | `cd sidecar && cargo test` |
+| Python backend | 294 | `cd backend && python -m pytest tests/ -v` |
+| Dashboard regression | 4 | `cd dashboard && npm test` |
+| Solana programs | 21 | `cd solana && anchor test` |
 | E2E integration | 10 | `./scripts/e2e_test.sh` |
-| **Total** | **189** | |
+| **Total** | **361** | |
 
 ## API Endpoints
 
@@ -179,6 +195,7 @@ anchor test  # runs on localnet
 | GET | `/api/v1/health` | Health check + connected sidecars count |
 | GET | `/api/v1/nodes` | List connected nodes with latest metrics |
 | GET | `/api/v1/nodes/{id}/metrics` | Historical metrics for a node |
+| POST | `/api/v1/metrics/batches` | REST metrics ingest for Colab/non-sidecar clients |
 | GET | `/api/v1/alerts` | Query alerts (filter by severity, type, node) |
 | GET | `/api/v1/alerts/{id}/enriched` | Alert with full metrics context |
 | GET | `/api/v1/diagnoses` | Query diagnoses |

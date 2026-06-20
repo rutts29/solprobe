@@ -2,11 +2,28 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 
+type AnchorAccount<T> = { fetch(address: anchor.web3.PublicKey): Promise<T> };
+type AttestationConfig = {
+  maxAttestationAgeSeconds: anchor.BN;
+  admin: anchor.web3.PublicKey;
+};
+type Attestation = {
+  jobId: string;
+  step: anchor.BN;
+  gpuModel: string;
+  verified: boolean;
+};
+type AttestationAccounts = {
+  attestationConfig: AnchorAccount<AttestationConfig>;
+  attestation: AnchorAccount<Attestation>;
+};
+
 describe("solprobe-attestation", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.SolprobeAttestation as Program;
+  const accounts = program.account as unknown as AttestationAccounts;
   const admin = provider.wallet;
 
   it("initializes config", async () => {
@@ -19,7 +36,7 @@ describe("solprobe-attestation", () => {
       [Buffer.from("attestation_config")],
       program.programId
     );
-    const config = await program.account.attestationConfig.fetch(configPda);
+    const config = await accounts.attestationConfig.fetch(configPda);
     assert.equal(config.maxAttestationAgeSeconds.toNumber(), 3600);
     assert.ok(config.admin.equals(admin.publicKey));
   });
@@ -45,7 +62,7 @@ describe("solprobe-attestation", () => {
       ],
       program.programId
     );
-    const att = await program.account.attestation.fetch(attPda);
+    const att = await accounts.attestation.fetch(attPda);
     assert.equal(att.jobId, jobId);
     assert.equal(att.step.toNumber(), 42);
     assert.equal(att.gpuModel, "T4");
@@ -73,7 +90,7 @@ describe("solprobe-attestation", () => {
       ],
       program.programId
     );
-    const att = await program.account.attestation.fetch(attPda);
+    const att = await accounts.attestation.fetch(attPda);
     assert.equal(att.jobId, jobId);
     assert.equal(att.gpuModel, gpuModel);
   });
@@ -97,7 +114,7 @@ describe("solprobe-attestation", () => {
       .accounts({ attestation: attPda })
       .rpc();
 
-    const att = await program.account.attestation.fetch(attPda);
+    const att = await accounts.attestation.fetch(attPda);
     assert.equal(att.verified, true);
   });
 

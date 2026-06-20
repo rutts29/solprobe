@@ -1,4 +1,4 @@
-.PHONY: proto-gen build-sidecar run-backend dev clean
+.PHONY: proto-gen build-sidecar run-backend demo dev clean
 
 proto-gen:
 	@mkdir -p backend/app/generated
@@ -18,6 +18,10 @@ run-sidecar:
 
 run-backend:
 	cd backend && uvicorn app.main:app --reload --port 8000
+
+demo:
+	@echo "Starting SolProbe demo with API key: $${SOLPROBE_API_KEY:-solprobe-demo-key}"
+	SOLPROBE_API_KEY=$${SOLPROBE_API_KEY:-solprobe-demo-key} bash scripts/demo_nanochat_solprobe.sh
 
 dev:
 	docker compose up --build

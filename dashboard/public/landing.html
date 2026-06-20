@@ -944,15 +944,16 @@
     <div style="font-family:var(--font-ui,'Inter');font-size:11px;color:var(--brand);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:8px;">Dashboard sign in</div>
     <div style="font-size:18px;font-weight:700;margin-bottom:4px;">Sign in to SolProbe</div>
     <div style="font-size:13px;color:var(--fg-2);margin-bottom:16px;line-height:1.5;">
-      Enter a local dashboard key to continue. Local development accepts any non-empty value.
+      Enter the backend API key to continue. For `make demo`, use `solprobe-demo-key`.
     </div>
     <form id="signin-form" style="display:flex;flex-direction:column;gap:10px;">
       <input type="password" id="signin-input" placeholder="local dashboard key"
              autocomplete="off" autofocus required
              style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--fg);font-size:14px;font-family:inherit;outline:none;" />
+      <div id="signin-error" role="alert" style="display:none;color:var(--crit);font-size:12px;line-height:1.4;"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:4px;">
         <button type="button" id="signin-cancel" class="btn btn-ghost">Cancel</button>
-        <button type="submit" class="btn btn-primary">Continue →</button>
+        <button type="submit" id="signin-submit" class="btn btn-primary">Continue →</button>
       </div>
     </form>
   </div>
@@ -961,11 +962,47 @@
 (function(){
   var overlay = document.getElementById('signin-overlay');
   var input = document.getElementById('signin-input');
-  function open(){ overlay.style.display = 'flex'; setTimeout(function(){ input.focus(); }, 50); }
-  function close(){ overlay.style.display = 'none'; }
-  function submit(key){
+  var error = document.getElementById('signin-error');
+  var submitButton = document.getElementById('signin-submit');
+  function setError(message){
+    error.textContent = message || '';
+    error.style.display = message ? 'block' : 'none';
+  }
+  function setPending(pending){
+    input.disabled = pending;
+    submitButton.disabled = pending;
+    submitButton.textContent = pending ? 'Checking...' : 'Continue →';
+  }
+  async function validateKey(key){
+    try {
+      var response = await fetch('/api/v1/nodes', {
+        headers: { 'X-SolProbe-API-Key': key },
+        cache: 'no-store'
+      });
+      return response.ok;
+    } catch (err) {
+      return false;
+    }
+  }
+  function open(){ setError(''); overlay.style.display = 'flex'; setTimeout(function(){ input.focus(); }, 50); }
+  function close(){ setError(''); overlay.style.display = 'none'; }
+  async function submit(key){
     var trimmed = (key || '').trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setError('Enter the backend API key to continue.');
+      return;
+    }
+    setError('');
+    setPending(true);
+    var valid = await validateKey(trimmed);
+    if (!valid) {
+      try { localStorage.removeItem('solprobe-api-key'); } catch(e) {}
+      setPending(false);
+      setError('Invalid API key. For make demo, use solprobe-demo-key.');
+      input.focus();
+      input.select();
+      return;
+    }
     try { localStorage.setItem('solprobe-api-key', trimmed); } catch(e) {}
     window.location.href = '/overview';
   }
