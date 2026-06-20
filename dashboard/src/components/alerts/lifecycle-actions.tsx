@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner } from "@/components/ui/error-banner";
+import { Input } from "@/components/ui/input";
 import { patchAlertState, postAlertNote } from "@/lib/api";
 import { formatTimestamp } from "@/lib/utils";
 import type { AlertLifecycle, AlertLifecycleState } from "@/lib/types";
@@ -120,12 +121,12 @@ export function LifecycleActions({ alertId, lifecycle, onChange }: LifecycleActi
           )}
 
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               placeholder="Add a note..."
-              className="flex-1 rounded-md border bg-background px-2 py-1 text-xs"
+              className="flex-1 text-xs"
               disabled={noteSubmitting}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {

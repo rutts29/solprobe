@@ -24,11 +24,11 @@ export default function NodeDetailPage({ params }: { params: Promise<{ nodeId: s
       <PageHeader
         title={<span className="font-mono">{nodeId}</span>}
         eyebrow="Monitoring / Nodes"
-        subtitle="Live GPU metrics for this node, auto-refreshing every 5s."
+        subtitle="Live GPU, training, and DiLoCo telemetry for this node."
         actions={<Badge variant="outline">Auto-refresh: 5s</Badge>}
       />
 
-      {error && <ErrorBanner title="Couldn't load node metrics" message={error} onRetry={refresh} />}
+      {error && <ErrorBanner title="Could not load node metrics" message={error} onRetry={refresh} />}
 
       {loading ? (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -37,7 +37,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ nodeId: s
       ) : metrics ? (
         <GpuCharts metrics={metrics} />
       ) : (
-        <EmptyState icon={Activity} title="No metrics available" description="This node has not reported GPU metrics yet." />
+        <EmptyState icon={Activity} title="No metrics yet" description="This node has not reported telemetry samples." />
       )}
     </div>
   );

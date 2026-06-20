@@ -13,13 +13,18 @@ import {
   Coins,
   ChevronsUpDown,
   ShieldCheck,
+  Activity,
+  ExternalLink,
 } from "lucide-react";
+
+const PUBLIC_STATUS_PAGE_URL = process.env.NEXT_PUBLIC_STATUS_PAGE_URL?.trim();
 
 interface NavItem {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   badgeKey?: "alerts" | "nodes";
+  external?: boolean;
 }
 
 const navGroups: { label: string; items: NavItem[] }[] = [
@@ -32,6 +37,12 @@ const navGroups: { label: string; items: NavItem[] }[] = [
       { href: "/diagnoses", label: "Diagnoses", icon: Brain },
       { href: "/training", label: "Training", icon: GitBranch },
       { href: "/policies", label: "Policies", icon: ShieldCheck },
+      {
+        href: PUBLIC_STATUS_PAGE_URL || "/status",
+        label: "Status",
+        icon: Activity,
+        external: Boolean(PUBLIC_STATUS_PAGE_URL),
+      },
     ],
   },
   {
@@ -106,19 +117,13 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
                 const badgeValue =
                   item.badgeKey === "alerts" ? alertCount :
                   item.badgeKey === "nodes" ? connectedNodes : 0;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                  >
+                const content = (
+                  <>
                     <item.icon className="h-4 w-4 shrink-0" />
                     {!collapsed && <span className="hidden md:inline">{item.label}</span>}
+                    {!collapsed && item.external && (
+                      <ExternalLink className="ml-auto hidden h-3 w-3 text-muted-foreground md:inline" />
+                    )}
                     {!collapsed && item.badgeKey && badgeValue > 0 && (
                       <Badge
                         variant={item.badgeKey === "alerts" ? "destructive" : "success"}
@@ -127,6 +132,36 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
                         {badgeValue}
                       </Badge>
                     )}
+                  </>
+                );
+                const className = cn(
+                  "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  active
+                    ? "border border-primary/20 bg-[var(--brand-soft)] text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                );
+                return item.external ? (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={className}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      active
+                        ? "border border-primary/20 bg-[var(--brand-soft)] text-primary"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                  >
+                    {content}
                   </Link>
                 );
               })}

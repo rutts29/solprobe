@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 interface SparklineProps {
   data: number[];
@@ -27,21 +27,25 @@ export function Sparkline({
   fillOpacity = 0.14,
   className,
 }: SparklineProps) {
+  const clipId = `sparkline-${useId().replaceAll(":", "")}`;
   const { d, area } = useMemo(() => {
     if (!data || data.length < 2) return { d: "", area: "" };
     const min = Math.min(...data);
     const max = Math.max(...data);
     const range = max - min || 1;
-    const stepX = width / (data.length - 1);
+    const inset = Math.max(strokeWidth, 1);
+    const innerWidth = Math.max(1, width - inset * 2);
+    const innerHeight = Math.max(1, height - inset * 2);
+    const stepX = innerWidth / (data.length - 1);
     const points = data.map((v, i) => {
-      const x = i * stepX;
-      const y = height - ((v - min) / range) * height;
+      const x = inset + i * stepX;
+      const y = inset + innerHeight - ((v - min) / range) * innerHeight;
       return [x, y] as const;
     });
     const line = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`).join(" ");
-    const filled = `${line} L${width} ${height} L0 ${height} Z`;
+    const filled = `${line} L${width - inset} ${height - inset} L${inset} ${height - inset} Z`;
     return { d: line, area: filled };
-  }, [data, width, height]);
+  }, [data, width, height, strokeWidth]);
 
   if (!d) return <svg width={width} height={height} className={className} />;
 
@@ -49,8 +53,11 @@ export function Sparkline({
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className}>
+      <clipPath id={clipId}>
+        <rect x="0" y="0" width={width} height={height} />
+      </clipPath>
       {fillOpacity > 0 && <path d={area} fill={fill} />}
-      <path d={d} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <path clipPath={`url(#${clipId})`} d={d} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

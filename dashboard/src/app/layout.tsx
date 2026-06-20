@@ -2,7 +2,6 @@
 // Adds <ThemeProvider> wrapping <AppShell>. Default theme stays dark.
 
 import type { Metadata } from "next";
-import Script from "next/script";
 import "./globals.css";
 import { AppShell } from "@/components/layout/app-shell";
 import { WebSocketProvider } from "@/lib/websocket";
@@ -15,10 +14,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark" className="dark" suppressHydrationWarning>
-      <head>
-        <Script src="/theme-init.js" strategy="beforeInteractive" />
-      </head>
+    <html
+      lang="en"
+      data-theme="dark"
+      className="dark"
+      suppressHydrationWarning
+    >
       <body className="antialiased">
         <ThemeProvider defaultTheme="dark">
           <WebSocketProvider>

@@ -11,18 +11,18 @@ export interface ErrorBannerProps {
   className?: string;
 }
 
-export function ErrorBanner({ title = "Something went wrong", message, onRetry, className }: ErrorBannerProps) {
+export function ErrorBanner({ title = "Request failed", message, onRetry, className }: ErrorBannerProps) {
   return (
-    <div className={cn("flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3", className)}>
-      <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+    <div className={cn("flex items-center gap-3 rounded-lg border border-[var(--crit)]/30 bg-[var(--crit-soft)] p-3", className)}>
+      <AlertCircle className="h-4 w-4 shrink-0 text-[var(--crit)]" />
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-red-400">{title}</div>
-        <div className="text-xs text-red-400/80">{message}</div>
+        <div className="text-sm font-medium text-[var(--crit)]">{title}</div>
+        <div className="text-xs text-[var(--crit)]/80">{message}</div>
       </div>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="shrink-0 rounded-md border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-300 hover:bg-red-500/20"
+          className="shrink-0 rounded-md border border-[var(--crit)]/30 bg-[var(--crit-soft)] px-2.5 py-1 text-xs font-medium text-[var(--crit)] hover:bg-[var(--crit-soft)]"
         >
           Retry
         </button>

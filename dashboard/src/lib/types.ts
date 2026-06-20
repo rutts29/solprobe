@@ -138,6 +138,19 @@ export interface EnrichedAlert {
   lifecycle?: AlertLifecycle | null;
 }
 
+export interface IncidentIoCreateResult {
+  incident_id: string;
+  reference: string | null;
+  permalink: string | null;
+  mode: string;
+}
+
+export interface IncidentIoServiceRequest {
+  service: string;
+  status: "degraded" | "down" | "maintenance";
+  summary?: string;
+}
+
 export interface HealthStatus {
   status: string;
   connected_sidecars: number;

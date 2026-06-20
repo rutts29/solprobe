@@ -10,6 +10,7 @@ cleanup() {
     echo ""
     echo "=== Deployment failed ==="
     echo "Resources may have been partially created."
+    rm -f "${ANTHROPIC_SECRET_FILE:-}"
     echo "Run 'infra/scripts/teardown.sh' to clean up."
     exit 1
 }
@@ -58,9 +59,14 @@ docker push "rutts29/solprobe-dashboard:${IMAGE_TAG}"
 # 4. Create namespace and secrets
 echo "[4/6] Creating namespace and secrets..."
 kubectl create namespace solprobe --dry-run=client -o yaml | kubectl apply -f -
+ANTHROPIC_SECRET_FILE="$(mktemp)"
+chmod 600 "$ANTHROPIC_SECRET_FILE"
+printf 'ANTHROPIC_API_KEY=%s\n' "$ANTHROPIC_API_KEY" > "$ANTHROPIC_SECRET_FILE"
 kubectl create secret generic solprobe-secrets -n solprobe \
-  --from-env-file=<(echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}") \
+  --from-env-file="$ANTHROPIC_SECRET_FILE" \
   --dry-run=client -o yaml | kubectl apply -f -
+rm -f "$ANTHROPIC_SECRET_FILE"
+unset ANTHROPIC_SECRET_FILE
 kubectl create secret generic grafana-secret -n solprobe \
   --from-literal=admin-password="${GRAFANA_ADMIN_PASSWORD:-$(openssl rand -base64 16)}" \
   --dry-run=client -o yaml | kubectl apply -f -

@@ -6,8 +6,12 @@ All endpoints are async and return JSON via Pydantic serialization.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 from typing import Any
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -74,6 +78,19 @@ class LifecycleStateRequest(BaseModel):
 class LifecycleNoteRequest(BaseModel):
     text: str
     author: str | None = None
+
+
+class IncidentIoCreateResponse(BaseModel):
+    incident_id: str
+    reference: str | None = None
+    permalink: str | None = None
+    mode: str
+
+
+class IncidentIoServiceRequest(BaseModel):
+    service: str = Field(min_length=1, max_length=80)
+    status: str = Field(default="degraded", pattern="^(degraded|down|maintenance)$")
+    summary: str | None = Field(default=None, max_length=1000)
 
 
 class JobStatusRequest(BaseModel):
@@ -232,6 +249,77 @@ def _alert_exists(alert_id: str) -> bool:
         if a.alert_id == alert_id:
             return True
     return False
+
+
+def _incident_io_service_payload(body: IncidentIoServiceRequest) -> dict[str, Any]:
+    mode = os.getenv("INCIDENT_IO_MODE", "test").strip() or "test"
+    visibility = os.getenv("INCIDENT_IO_VISIBILITY", "public").strip() or "public"
+    now_ms = int(time.time() * 1000)
+    service = body.service.strip()
+    status = body.status.strip()
+    summary = body.summary.strip() if body.summary else f"{service} is currently {status}."
+    payload: dict[str, Any] = {
+        "idempotency_key": f"solprobe-infra-{service.lower().replace(' ', '-')}-{status}-{now_ms}",
+        "mode": mode,
+        "visibility": visibility,
+        "name": f"SolProbe service {status}: {service}",
+        "summary": (
+            f"{summary}\n\n"
+            "Source: SolProbe status page\n"
+            f"Service: {service}\n"
+            f"Status: {status}"
+        ),
+    }
+    if severity_id := os.getenv("INCIDENT_IO_SEVERITY_ID"):
+        payload["severity_id"] = severity_id
+    if incident_type_id := os.getenv("INCIDENT_IO_INCIDENT_TYPE_ID"):
+        payload["incident_type_id"] = incident_type_id
+    return payload
+
+
+def _post_incident_io_json(payload: dict[str, Any]) -> dict[str, Any]:
+    api_key = os.getenv("INCIDENT_IO_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("incident.io is not configured")
+
+    base_url = os.getenv("INCIDENT_IO_API_URL", "https://api.incident.io").rstrip("/")
+    req = urlrequest.Request(
+        f"{base_url}/v2/incidents",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urlerror.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        logger.warning("incident.io create failed: status=%s body=%s", exc.code, detail[:500])
+        raise HTTPException(status_code=502, detail="incident.io rejected the incident request") from exc
+    except urlerror.URLError as exc:
+        logger.warning("incident.io create failed: %s", exc)
+        raise HTTPException(status_code=502, detail="incident.io could not be reached") from exc
+
+
+@router.post("/incident-io/incidents", response_model=IncidentIoCreateResponse)
+async def create_incident_io_service_incident(body: IncidentIoServiceRequest) -> IncidentIoCreateResponse:
+    """Create an incident.io incident for SolProbe service/infra health."""
+    if not os.getenv("INCIDENT_IO_API_KEY", "").strip():
+        raise HTTPException(status_code=503, detail="incident.io is not configured")
+
+    payload = _incident_io_service_payload(body)
+    result = await asyncio.to_thread(_post_incident_io_json, payload)
+    incident = result.get("incident") or {}
+    return IncidentIoCreateResponse(
+        incident_id=incident.get("id", ""),
+        reference=incident.get("reference"),
+        permalink=incident.get("permalink"),
+        mode=payload["mode"],
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -95,7 +95,7 @@ export default function AlertsPage() {
         ]}
       />
 
-      {error && <ErrorBanner title="Couldn't load alerts" message={error} onRetry={refresh} />}
+      {error && <ErrorBanner title="Could not load alerts" message={error} onRetry={refresh} />}
 
       <SeveritySummary alerts={alerts} />
 

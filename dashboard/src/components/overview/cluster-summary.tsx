@@ -14,14 +14,14 @@ interface ClusterSummaryProps {
 }
 
 const TONE_DOT: Record<string, string> = {
-  ok: "bg-emerald-500",
-  warn: "bg-amber-500",
-  crit: "bg-red-500",
-  muted: "bg-zinc-500",
+  ok: "bg-[var(--ok)]",
+  warn: "bg-[var(--warn)]",
+  crit: "bg-[var(--crit)]",
+  muted: "bg-muted-foreground",
 };
 
 function Bar({ value, tone = "ok" }: { value: number; tone?: "ok" | "warn" | "crit" }) {
-  const fill = tone === "crit" ? "bg-red-500" : tone === "warn" ? "bg-amber-500" : "bg-emerald-500";
+  const fill = tone === "crit" ? "bg-[var(--crit)]" : tone === "warn" ? "bg-[var(--warn)]" : "bg-[var(--ok)]";
   return (
     <div className="flex items-center gap-2 min-w-[110px]">
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -109,8 +109,8 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
                       {gpu ? (
                         <span className={cn(
                           "font-mono tabular-nums text-xs",
-                          tTone === "crit" && "text-red-500 dark:text-red-400",
-                          tTone === "warn" && "text-amber-500 dark:text-amber-400",
+                          tTone === "crit" && "text-[var(--crit)]",
+                          tTone === "warn" && "text-[var(--warn)]",
                           tTone === "ok" && "text-foreground",
                         )}>
                           {tempAvailable ? `${gpu.gpu_temp_c}°C` : "—"}

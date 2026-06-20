@@ -37,12 +37,12 @@ export default function NodesPage() {
       <PageHeader
         title="Nodes"
         eyebrow="Monitoring"
-        subtitle="GPU nodes reporting through the sidecar. Click a node for live metrics."
-        badge={<span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-primary"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{nodes.length} live</span>}
+        subtitle="GPU nodes reporting through the sidecar. Select a node to inspect live metrics."
+        badge={<span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--ok)]/30 bg-[var(--ok-soft)] px-2.5 py-0.5 font-mono text-[11px] font-semibold text-[var(--ok)]"><span className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" />{nodes.length} live</span>}
       />
 
       {error ? (
-        <ErrorBanner title="Couldn't load nodes" message={error} onRetry={refresh} />
+        <ErrorBanner title="Could not load nodes" message={error} onRetry={refresh} />
       ) : (
         <Toolbar>
           <SegmentedControl<StatusFilter>
@@ -69,7 +69,7 @@ export default function NodesPage() {
         <EmptyState
           icon={Server}
           title={nodes.length === 0 ? "No nodes connected" : "No nodes match your filters"}
-          description={nodes.length === 0 ? "Start a sidecar to begin streaming metrics." : "Try clearing the search or status filter."}
+          description={nodes.length === 0 ? "Start a sidecar to stream metrics." : "Clear the search or status filter."}
           action={nodes.length === 0 ? <code className="rounded-md border bg-muted px-2 py-1 font-mono text-xs text-primary">make demo</code> : undefined}
         />
       ) : (

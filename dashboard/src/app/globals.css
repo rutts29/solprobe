@@ -21,8 +21,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-ui, 'Inter'), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-code, 'JetBrains Mono'), ui-monospace, SFMono-Regular, monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -33,25 +33,25 @@
 :root,
 [data-theme="dark"] {
   --radius: 0.5rem;
-  --background: #09090b;
+  --background: #050505;
   --foreground: #fafafa;
-  --card: #0a0a0f;
+  --card: #050505;
   --card-foreground: #fafafa;
-  --surface-2: #101017;
-  --popover: #09090b;
+  --surface-2: #101010;
+  --popover: #050505;
   --popover-foreground: #fafafa;
   --primary: #FF6B35;
-  --primary-foreground: #0a0a0f;
-  --secondary: #1e1e2e;
+  --primary-foreground: #050505;
+  --secondary: #101010;
   --secondary-foreground: #fafafa;
-  --muted: #1a1a2e;
+  --muted: #101010;
   --muted-foreground: #a1a1aa;
-  --accent: #1e1e2e;
+  --accent: #101010;
   --accent-foreground: #fafafa;
   --destructive: #ef4444;
   --destructive-foreground: #fafafa;
-  --border: #27272a;
-  --input: #27272a;
+  --border: #242424;
+  --input: #242424;
   --ring: #FF6B35;
 
   /* Semantic accents — used by charts, status dots, sparklines */
@@ -60,6 +60,11 @@
   --crit: #ef4444;
   --info: #3b82f6;
   --brand: #FF6B35;
+  --ok-soft: rgba(16, 185, 129, .16);
+  --warn-soft: rgba(245, 158, 11, .16);
+  --crit-soft: rgba(239, 68, 68, .16);
+  --info-soft: rgba(59, 130, 246, .16);
+  --brand-soft: rgba(255, 107, 53, .12);
 }
 
 /* ---------- Light theme ---------- */
@@ -90,6 +95,11 @@
   --crit: #dc2626;
   --info: #2563eb;
   --brand: #FF6B35;
+  --ok-soft: rgba(5, 150, 105, .14);
+  --warn-soft: rgba(217, 119, 6, .14);
+  --crit-soft: rgba(220, 38, 38, .14);
+  --info-soft: rgba(37, 99, 235, .14);
+  --brand-soft: #FFF4EE;
 }
 
 * {
@@ -99,7 +109,9 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-ui, 'Inter'), system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  letter-spacing: -0.005em;
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }

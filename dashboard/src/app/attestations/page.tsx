@@ -38,7 +38,7 @@ export default function AttestationsPage() {
         ]}
       />
 
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+      <div className="rounded-lg border border-[var(--warn)]/30 bg-[var(--warn-soft)] px-3 py-2 text-xs text-[var(--warn)]">
         Showing sample data - the backend has no attestation endpoint yet. These rows demonstrate the on-chain trust layer.
       </div>
 

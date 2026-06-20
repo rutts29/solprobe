@@ -219,7 +219,7 @@ cd backend && python -m pytest tests/ -v
 ### Manual E2E test
 ```bash
 # Terminal 1: Start backend
-export ANTHROPIC_API_KEY="sk-ant-..."
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
 cd backend && source .venv/bin/activate && uvicorn app.main:app --port 8000
 
 # Terminal 2: Start sidecar with fault injection

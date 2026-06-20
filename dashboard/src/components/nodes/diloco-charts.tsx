@@ -49,7 +49,7 @@ export function DilocoCharts({ data }: DilocoChartsProps) {
                 <XAxis dataKey="step" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
-                <Line type="monotone" dataKey="pseudoGradNorm" stroke="#8b5cf6" strokeWidth={2} dot={false} name="Pseudo Grad Norm" />
+                <Line type="monotone" dataKey="pseudoGradNorm" stroke="var(--brand)" strokeWidth={2} dot={false} name="Pseudo Grad Norm" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -66,7 +66,7 @@ export function DilocoCharts({ data }: DilocoChartsProps) {
                 <XAxis dataKey="step" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
-                <Line type="monotone" dataKey="syncDuration" stroke="#06b6d4" strokeWidth={2} dot={false} name="Sync (ms)" />
+                <Line type="monotone" dataKey="syncDuration" stroke="var(--info)" strokeWidth={2} dot={false} name="Sync (ms)" />
               </LineChart>
             </ResponsiveContainer>
           </div>

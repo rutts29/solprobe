@@ -57,8 +57,8 @@ interface KpiCardProps {
 function KpiCard({ label, value, unit, delta, trend, icon: Icon, iconTone, spark, sparkKind = "line", sparkColor = "var(--brand)" }: KpiCardProps) {
   const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
   const trendColor =
-    trend === "up" ? "text-emerald-500 dark:text-emerald-400" :
-    trend === "down" ? "text-red-500 dark:text-red-400" : "text-muted-foreground";
+    trend === "up" ? "text-[var(--ok)]" :
+    trend === "down" ? "text-[var(--crit)]" : "text-muted-foreground";
   return (
     <Card>
       <CardContent className="p-4">
@@ -79,7 +79,7 @@ function KpiCard({ label, value, unit, delta, trend, icon: Icon, iconTone, spark
               </div>
             )}
           </div>
-          <div className="opacity-90">
+          <div className="shrink-0 overflow-hidden opacity-90">
             {sparkKind === "bars"
               ? <SparkBars data={spark ?? []} width={64} height={28} color={sparkColor} />
               : <Sparkline data={spark ?? []} width={64} height={28} stroke={sparkColor} fillOpacity={0.18} />}
@@ -109,7 +109,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
         delta="live"
         trend="flat"
         icon={Server}
-        iconTone="text-emerald-500 dark:text-emerald-400"
+        iconTone="text-[var(--ok)]"
         spark={history?.util ?? flat(util)}
         sparkColor="var(--ok)"
       />
@@ -120,7 +120,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
         delta={`${util > 80 ? "saturated" : util > 50 ? "active" : "idle"}`}
         trend={util > 80 ? "up" : util < 30 ? "down" : "flat"}
         icon={Cpu}
-        iconTone="text-orange-500 dark:text-orange-400"
+        iconTone="text-primary"
         spark={history?.util ?? flat(util)}
         sparkColor="var(--brand)"
       />
@@ -129,7 +129,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
         value={tps >= 1000 ? (tps / 1000).toFixed(1) : tps.toFixed(0)}
         unit={tps >= 1000 ? "k tok/s" : "tok/s"}
         icon={TrendingUp}
-        iconTone="text-blue-500 dark:text-blue-400"
+        iconTone="text-[var(--info)]"
         spark={history?.throughput ?? flat(tps)}
         sparkColor="var(--info)"
       />
@@ -139,7 +139,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
         delta={`${alertsTotal} total`}
         trend={apm[apm.length - 1] > apm[0] ? "up" : "flat"}
         icon={AlertTriangle}
-        iconTone="text-amber-500 dark:text-amber-400"
+        iconTone="text-[var(--warn)]"
         spark={apm}
         sparkColor="var(--warn)"
         sparkKind="bars"
@@ -150,7 +150,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
         delta="today"
         trend="flat"
         icon={Brain}
-        iconTone="text-orange-500 dark:text-orange-400"
+        iconTone="text-primary"
         spark={flat(diagnosesTotal)}
         sparkColor="var(--brand)"
       />
@@ -161,7 +161,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
         delta={temp === null ? "avg temp —" : `avg ${temp.toFixed(0)}°C`}
         trend={temp !== null && temp > 75 ? "up" : "flat"}
         icon={Zap}
-        iconTone="text-amber-500 dark:text-amber-400"
+        iconTone="text-[var(--warn)]"
         spark={history?.power ?? (power === null ? [] : flat(power))}
         sparkColor="var(--warn)"
       />

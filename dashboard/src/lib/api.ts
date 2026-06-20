@@ -6,6 +6,8 @@ import type {
   AlertLifecycle,
   AlertLifecycleState,
   EnrichedAlert,
+  IncidentIoCreateResult,
+  IncidentIoServiceRequest,
   DiagnosisResult,
   JobModel,
   JobSummary,
@@ -18,6 +20,13 @@ import { authHeaders, clearStoredApiKey } from "./auth";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
+function apiErrorMessage(status: number): string {
+  if (status === 401 || status === 403) return "Your session expired. Sign in again to continue.";
+  if (status === 404) return "The requested resource was not found.";
+  if (status >= 500) return "The backend returned an error. Check the server logs and try again.";
+  return `Request failed with status ${status}.`;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
@@ -27,7 +36,8 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     if (res.status === 401 || res.status === 403) {
       clearStoredApiKey();
     }
-    throw new Error(`API error ${res.status}: ${await res.text()}`);
+    console.error("[api] request failed", { path, status: res.status, body: await res.text() });
+    throw new Error(apiErrorMessage(res.status));
   }
   return res.json();
 }
@@ -82,6 +92,13 @@ export function requestDiagnosis(alertId: string): Promise<DiagnosisResult> {
   return apiFetch("/api/v1/diagnoses", {
     method: "POST",
     body: JSON.stringify({ alert_id: alertId }),
+  });
+}
+
+export function createSolProbeIncident(body: IncidentIoServiceRequest): Promise<IncidentIoCreateResult> {
+  return apiFetch("/api/v1/incident-io/incidents", {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 
@@ -148,7 +165,8 @@ export function deletePolicy(policyId: string): Promise<void> {
       if (res.status === 401 || res.status === 403) {
         clearStoredApiKey();
       }
-      throw new Error(`API error ${res.status}: ${res.statusText}`);
+      console.error("[api] delete policy failed", { policyId, status: res.status, statusText: res.statusText });
+      throw new Error(apiErrorMessage(res.status));
     }
   });
 }
