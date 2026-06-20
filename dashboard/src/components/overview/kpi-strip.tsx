@@ -102,7 +102,7 @@ export function KpiStrip({ nodes, alerts, health, history }: KpiStripProps) {
   const flat = (n: number, len = 12) => Array(len).fill(n);
 
   return (
-    <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <KpiCard
         label="Connected nodes"
         value={String(nodes.length || health?.connected_sidecars || 0)}

@@ -2,11 +2,25 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 
+type AnchorAccount<T> = { fetch(address: anchor.web3.PublicKey): Promise<T> };
+type WorkerProfile = {
+  reputationScore: number;
+  totalJobs: anchor.BN;
+  completedJobs: anchor.BN;
+  failedJobs: anchor.BN;
+  totalStakeSlashed: anchor.BN;
+  authority: anchor.web3.PublicKey;
+};
+type ReputationAccounts = {
+  workerProfile: AnchorAccount<WorkerProfile>;
+};
+
 describe("solprobe-reputation", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.SolprobeReputation as Program;
+  const accounts = program.account as unknown as ReputationAccounts;
   const worker = provider.wallet;
 
   it("registers worker", async () => {
@@ -16,7 +30,7 @@ describe("solprobe-reputation", () => {
       [Buffer.from("worker_profile"), worker.publicKey.toBuffer()],
       program.programId
     );
-    const profile = await program.account.workerProfile.fetch(profilePda);
+    const profile = await accounts.workerProfile.fetch(profilePda);
     assert.equal(profile.reputationScore, 10000);
     assert.equal(profile.totalJobs.toNumber(), 0);
     assert.ok(profile.authority.equals(worker.publicKey));
@@ -29,7 +43,7 @@ describe("solprobe-reputation", () => {
       [Buffer.from("worker_profile"), worker.publicKey.toBuffer()],
       program.programId
     );
-    const profile = await program.account.workerProfile.fetch(profilePda);
+    const profile = await accounts.workerProfile.fetch(profilePda);
     assert.equal(profile.totalJobs.toNumber(), 1);
     assert.equal(profile.completedJobs.toNumber(), 1);
     assert.equal(profile.reputationScore, 10000); // 100%
@@ -45,7 +59,7 @@ describe("solprobe-reputation", () => {
       [Buffer.from("worker_profile"), worker.publicKey.toBuffer()],
       program.programId
     );
-    const profile = await program.account.workerProfile.fetch(profilePda);
+    const profile = await accounts.workerProfile.fetch(profilePda);
     assert.equal(profile.totalJobs.toNumber(), 2);
     assert.equal(profile.completedJobs.toNumber(), 1);
     assert.equal(profile.failedJobs.toNumber(), 1);

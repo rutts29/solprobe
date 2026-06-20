@@ -2,11 +2,25 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 
+type AnchorAccount<T> = { fetch(address: anchor.web3.PublicKey): Promise<T> };
+type EscrowJob = {
+  jobId: string;
+  totalBudget: anchor.BN;
+  releasedAmount: anchor.BN;
+  workers: anchor.web3.PublicKey[];
+  creator: anchor.web3.PublicKey;
+  status: unknown;
+};
+type EscrowAccounts = {
+  escrowJob: AnchorAccount<EscrowJob>;
+};
+
 describe("solprobe-escrow", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.SolprobeEscrow as Program;
+  const accounts = program.account as unknown as EscrowAccounts;
   const creator = provider.wallet;
 
   const jobId = "escrow-test-001";
@@ -24,7 +38,7 @@ describe("solprobe-escrow", () => {
       [Buffer.from("escrow_job"), Buffer.from(jobId)],
       program.programId
     );
-    const escrow = await program.account.escrowJob.fetch(escrowPda);
+    const escrow = await accounts.escrowJob.fetch(escrowPda);
     assert.equal(escrow.jobId, jobId);
     assert.equal(escrow.totalBudget.toNumber(), 1_000_000_000);
     assert.equal(escrow.releasedAmount.toNumber(), 0);
@@ -32,20 +46,33 @@ describe("solprobe-escrow", () => {
     assert.ok(escrow.creator.equals(creator.publicKey));
   });
 
-  it("releases payment to worker", async () => {
-    // Airdrop to worker1 so they can sign
-    const sig = await provider.connection.requestAirdrop(
-      worker1.publicKey,
-      100_000_000
-    );
-    await provider.connection.confirmTransaction(sig);
+  it("rejects worker self-release without creator approval", async () => {
+    const guardedJobId = "escrow-guarded-001";
+    const guardedWorker = anchor.web3.Keypair.generate();
 
+    await program.methods
+      .createJob(guardedJobId, [guardedWorker.publicKey], new anchor.BN(100_000_000))
+      .accounts({})
+      .rpc();
+
+    try {
+      await program.methods
+        .releasePayment(guardedJobId)
+        .accounts({ worker: guardedWorker.publicKey })
+        .signers([guardedWorker])
+        .rpc();
+      assert.fail("Should have required creator approval");
+    } catch (err) {
+      assert.match(err.toString(), /creator|unknown|missing|required/i);
+    }
+  });
+
+  it("releases payment to worker when creator approves", async () => {
     const balBefore = await provider.connection.getBalance(worker1.publicKey);
 
     await program.methods
       .releasePayment(jobId)
-      .accounts({ worker: worker1.publicKey })
-      .signers([worker1])
+      .accounts({ worker: worker1.publicKey, creator: creator.publicKey })
       .rpc();
 
     const balAfter = await provider.connection.getBalance(worker1.publicKey);
@@ -55,7 +82,7 @@ describe("solprobe-escrow", () => {
       [Buffer.from("escrow_job"), Buffer.from(jobId)],
       program.programId
     );
-    const escrow = await program.account.escrowJob.fetch(escrowPda);
+    const escrow = await accounts.escrowJob.fetch(escrowPda);
     assert.equal(escrow.releasedAmount.toNumber(), 500_000_000);
   });
 
@@ -71,7 +98,7 @@ describe("solprobe-escrow", () => {
       [Buffer.from("escrow_job"), Buffer.from(jobId)],
       program.programId
     );
-    const escrow = await program.account.escrowJob.fetch(escrowPda);
+    const escrow = await accounts.escrowJob.fetch(escrowPda);
     assert.equal(escrow.releasedAmount.toNumber(), 1_000_000_000); // Both allocations handled
   });
 
@@ -99,7 +126,7 @@ describe("solprobe-escrow", () => {
       [Buffer.from("escrow_job"), Buffer.from(jobId)],
       program.programId
     );
-    const escrow = await program.account.escrowJob.fetch(escrowPda);
+    const escrow = await accounts.escrowJob.fetch(escrowPda);
     assert.deepEqual(escrow.status, { completed: {} });
   });
 });

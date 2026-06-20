@@ -9,18 +9,19 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 import time
 
+from app.auth import require_api_key
 from app.diagnosis.agent import get_or_create_agent
 from app.diagnosis.models import DiagnosisRequest, DiagnosisResult
 from app.diagnosis.store import diagnosis_store
 from app.enrichment import enrich_alert
 from app.models.alerts import AlertModel, EnrichedAlert, JobRegistration
-from app.models.metrics import CustomMetricModel, GpuMetricsModel, NodeStatus
+from app.models.metrics import CustomMetricModel, GpuMetricsModel, MetricsBatchModel, NodeStatus
 from app.models.policies import MonitoringPolicy, PolicyCreate, PolicyUpdate
 from app.stores import (
     alert_lifecycle_store,
@@ -34,7 +35,7 @@ from app.stores import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1", tags=["solprobe"])
+router = APIRouter(prefix="/api/v1", tags=["solprobe"], dependencies=[Depends(require_api_key)])
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +90,25 @@ def _attach_lifecycle(alert: AlertModel) -> AlertWithLifecycle:
 # ---------------------------------------------------------------------------
 # Node endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.post("/metrics/batches", status_code=201)
+async def post_metrics_batches(
+    body: MetricsBatchModel | list[MetricsBatchModel],
+) -> dict[str, int]:
+    """Ingest metrics batches over REST.
+
+    This mirrors the gRPC sidecar ingest path for clients that cannot run the
+    Rust sidecar, such as Google Colab notebooks.
+    """
+    items = body if isinstance(body, list) else [body]
+    if not items:
+        raise HTTPException(status_code=400, detail="Empty metrics batch list")
+    for batch in items:
+        if not batch.gpu and batch.training is None and batch.diloco is None:
+            raise HTTPException(status_code=400, detail="Metrics batch has no samples")
+        metrics_store.ingest_batch(batch)
+    return {"accepted": len(items)}
 
 
 @router.get("/nodes", response_model=list[NodeStatus])

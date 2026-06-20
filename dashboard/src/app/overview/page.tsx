@@ -1,12 +1,11 @@
-// REPLACE: dashboard/src/app/overview/page.tsx
-// Uses the new <KpiStrip> instead of <HealthCards>. Same hooks, same data flow.
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { KpiStrip } from "@/components/overview/kpi-strip";
 import { ClusterSummary } from "@/components/overview/cluster-summary";
 import { RecentAlerts } from "@/components/overview/recent-alerts";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { PageHeader } from "@/components/ui/page-header";
 import { useNodes } from "@/hooks/use-nodes";
 import { useAlerts } from "@/hooks/use-alerts";
 import { useWebSocket } from "@/lib/websocket";
@@ -53,15 +52,16 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Cluster Overview</h1>
-      </div>
+      <PageHeader
+        title="Cluster Overview"
+        subtitle="Real-time health across every sidecar-connected GPU node."
+        meta={[
+          { tone: "ok", children: `${nodes.length} nodes live` },
+          { tone: healthError ? "crit" : "ok", children: healthError ? "backend unreachable" : "streaming" },
+        ]}
+      />
 
-      {healthError && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
-          Backend unreachable: {healthError}
-        </div>
-      )}
+      {healthError && <ErrorBanner message={`Backend unreachable: ${healthError}`} />}
 
       <KpiStrip nodes={nodes} alerts={alerts} health={health} history={history} />
 

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+from app.auth import require_websocket_api_key
 from app.models.alerts import AlertModel
 from app.stores import metrics_store
 
@@ -55,6 +56,7 @@ class ConnectionManager:
 
     async def connect(self, ws: WebSocket) -> _Connection:
         """Accept a WebSocket and register it."""
+        await require_websocket_api_key(ws)
         await ws.accept()
         conn = _Connection(ws=ws)
         async with self._lock:

@@ -57,7 +57,7 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
     <aside
       className={cn(
         "fixed left-0 top-0 z-40 flex h-screen flex-col border-r bg-card transition-all duration-200",
-        collapsed ? "w-16" : "w-60"
+        collapsed ? "w-16" : "w-16 md:w-60"
       )}
     >
       {/* Logo */}
@@ -73,7 +73,7 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/solprobe-mark.svg" alt="" className="h-8 w-8 shrink-0" />
           {!collapsed && (
-            <span className="whitespace-nowrap text-base font-bold tracking-tight">
+            <span className="hidden whitespace-nowrap text-base font-bold tracking-tight md:inline">
               <span className="text-foreground">Sol</span><span className="font-medium text-muted-foreground">Probe</span>
             </span>
           )}
@@ -82,7 +82,7 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
 
       {/* Cluster picker */}
       {!collapsed && (
-        <button className="mx-2 mt-3 flex items-center justify-between rounded-md border bg-background/50 px-3 py-2 text-left text-xs hover:bg-accent">
+        <button className="mx-2 mt-3 hidden items-center justify-between rounded-md border bg-background/50 px-3 py-2 text-left text-xs hover:bg-accent md:flex">
           <div>
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Cluster</div>
             <div className="font-mono text-foreground">{clusterName}</div>
@@ -96,7 +96,7 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
         {navGroups.map((group) => (
           <div key={group.label}>
             {!collapsed && (
-              <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="mb-1 hidden px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground md:block">
                 {group.label}
               </div>
             )}
@@ -118,11 +118,11 @@ export function Sidebar({ connectedNodes, alertCount, collapsed, onToggle, clust
                     )}
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
-                    {!collapsed && <span>{item.label}</span>}
+                    {!collapsed && <span className="hidden md:inline">{item.label}</span>}
                     {!collapsed && item.badgeKey && badgeValue > 0 && (
                       <Badge
                         variant={item.badgeKey === "alerts" ? "destructive" : "success"}
-                        className="ml-auto text-[10px]"
+                        className="ml-auto hidden text-[10px] md:inline-flex"
                       >
                         {badgeValue}
                       </Badge>

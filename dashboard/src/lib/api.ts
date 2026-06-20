@@ -14,15 +14,21 @@ import type {
   PolicyUpdate,
   CustomMetric,
 } from "./types";
+import { authHeaders, clearStoredApiKey } from "./auth";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: { "Content-Type": "application/json", ...authHeaders(), ...init?.headers },
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      clearStoredApiKey();
+    }
+    throw new Error(`API error ${res.status}: ${await res.text()}`);
+  }
   return res.json();
 }
 
@@ -136,8 +142,14 @@ export function patchPolicy(
 export function deletePolicy(policyId: string): Promise<void> {
   return fetch(`${BASE_URL}/api/v1/policies/${policyId}`, {
     method: "DELETE",
+    headers: authHeaders(),
   }).then((res) => {
-    if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        clearStoredApiKey();
+      }
+      throw new Error(`API error ${res.status}: ${res.statusText}`);
+    }
   });
 }
 
@@ -164,4 +176,3 @@ export function fetchCustomMetricNames(jobId?: string): Promise<string[]> {
   const qs = jobId ? `?job_id=${encodeURIComponent(jobId)}` : "";
   return apiFetch(`/api/v1/custom-metrics/names${qs}`);
 }
-

@@ -17,7 +17,7 @@ class TestWebSocketConnection:
         app, *_ = test_app
         sync_client = TestClient(app)
 
-        with sync_client.websocket_connect("/ws/stream") as ws:
+        with sync_client.websocket_connect("/ws/stream?api_key=test-secret") as ws:
             # Connection should succeed — send a filter message
             ws.send_text(json.dumps({"node_ids": ["node-1"]}))
             # If we got here, connection and filter were accepted
@@ -28,7 +28,7 @@ class TestWebSocketConnection:
         app, ms, als, ans, js, *_, wm = test_app
 
         sync_client = TestClient(app)
-        with sync_client.websocket_connect("/ws/stream") as ws:
+        with sync_client.websocket_connect("/ws/stream?api_key=test-secret") as ws:
             # Subscribe to a specific node
             ws.send_text(json.dumps({
                 "node_ids": ["node-1"],
@@ -43,8 +43,8 @@ class TestWebSocketConnection:
         app, *_, wm = test_app
 
         sync_client = TestClient(app)
-        with sync_client.websocket_connect("/ws/stream") as ws1:
-            with sync_client.websocket_connect("/ws/stream") as ws2:
+        with sync_client.websocket_connect("/ws/stream?api_key=test-secret") as ws1:
+            with sync_client.websocket_connect("/ws/stream?api_key=test-secret") as ws2:
                 assert wm.active_count >= 2
 
 

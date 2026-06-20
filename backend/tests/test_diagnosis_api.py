@@ -78,8 +78,9 @@ def _make_alert(
 
 
 @pytest.fixture()
-def diagnosis_app():
+def diagnosis_app(monkeypatch: pytest.MonkeyPatch):
     """Create a test app with fresh stores including diagnosis store."""
+    monkeypatch.setenv("SOLPROBE_API_KEY", "test-secret")
     import app.api.routes as routes_mod
     import app.enrichment as enrichment_mod
 
@@ -108,7 +109,11 @@ async def diag_client(diagnosis_app):
     """Async HTTP client for diagnosis tests."""
     app, *_ = diagnosis_app
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-SolProbe-API-Key": "test-secret"},
+    ) as ac:
         yield ac
 
 

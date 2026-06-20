@@ -4,8 +4,11 @@ import { use } from "react";
 import { GpuCharts } from "@/components/nodes/gpu-charts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { PageHeader } from "@/components/ui/page-header";
 import { useNodeMetrics } from "@/hooks/use-nodes";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Activity } from "lucide-react";
 import Link from "next/link";
 
 export default function NodeDetailPage({ params }: { params: Promise<{ nodeId: string }> }) {
@@ -14,20 +17,18 @@ export default function NodeDetailPage({ params }: { params: Promise<{ nodeId: s
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/nodes" className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <h1 className="text-2xl font-bold font-mono">{nodeId}</h1>
-        <Badge variant="outline">Auto-refresh: 5s</Badge>
-      </div>
+      <Link href="/nodes" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" />
+        Nodes
+      </Link>
+      <PageHeader
+        title={<span className="font-mono">{nodeId}</span>}
+        eyebrow="Monitoring / Nodes"
+        subtitle="Live GPU metrics for this node, auto-refreshing every 5s."
+        actions={<Badge variant="outline">Auto-refresh: 5s</Badge>}
+      />
 
-      {error && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-          {error}
-          <button onClick={() => refresh()} className="ml-2 underline">Retry</button>
-        </div>
-      )}
+      {error && <ErrorBanner title="Couldn't load node metrics" message={error} onRetry={refresh} />}
 
       {loading ? (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -36,7 +37,7 @@ export default function NodeDetailPage({ params }: { params: Promise<{ nodeId: s
       ) : metrics ? (
         <GpuCharts metrics={metrics} />
       ) : (
-        <p className="text-muted-foreground">No metrics available for this node</p>
+        <EmptyState icon={Activity} title="No metrics available" description="This node has not reported GPU metrics yet." />
       )}
     </div>
   );

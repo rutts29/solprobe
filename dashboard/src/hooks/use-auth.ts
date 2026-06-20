@@ -1,35 +1,39 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-
-const API_KEY_STORAGE = "solprobe-api-key";
+import { API_KEY_STORAGE, AUTH_CHANGED_EVENT, clearStoredApiKey, setStoredApiKey } from "@/lib/auth";
 
 /**
- * Local-dev auth: stores an API key in localStorage. No server validation —
- * any non-empty string is accepted. Intended for local-only use until a real
- * auth/session layer is built.
+ * Stores the backend API key in localStorage and keeps same-tab hooks in sync.
  */
 export function useAuth() {
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string | null>(() => (
+    typeof window !== "undefined" ? localStorage.getItem(API_KEY_STORAGE) : null
+  ));
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(API_KEY_STORAGE) : null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrating from localStorage after SSR, one-time
-    setApiKey(stored);
+    function syncFromStorage() {
+      const stored = typeof window !== "undefined" ? localStorage.getItem(API_KEY_STORAGE) : null;
+      setApiKey(stored);
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrating auth state after SSR, one-time
     setLoaded(true);
+    window.addEventListener(AUTH_CHANGED_EVENT, syncFromStorage);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, syncFromStorage);
   }, []);
 
   const signIn = useCallback((key: string) => {
     const trimmed = key.trim();
     if (!trimmed) return false;
-    localStorage.setItem(API_KEY_STORAGE, trimmed);
+    setStoredApiKey(trimmed);
     setApiKey(trimmed);
     return true;
   }, []);
 
   const signOut = useCallback(() => {
-    localStorage.removeItem(API_KEY_STORAGE);
+    clearStoredApiKey();
     setApiKey(null);
   }, []);
 

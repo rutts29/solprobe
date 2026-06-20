@@ -1,10 +1,10 @@
 # SolProbe Showcase
 
-SolProbe is a fault-detection and diagnosis layer for distributed AI training. The demo here runs the full stack on a single Apple Silicon Mac against a tiny GPT trained on synthetic data, so a reviewer can poke at the dashboard without a GPU cluster.
+SolProbe is a fault-detection and diagnosis layer for distributed AI training. The demo here runs the full stack on a single Apple Silicon Mac against a tiny GPT trained on synthetic data, and it can also ingest a Google Colab T4 notebook over REST when free Colab GPU capacity is available.
 
 ## What SolProbe monitors
 
-A Rust sidecar polls the host every second and forwards three streams to the backend over gRPC: GPU hardware counters (temperature, utilization, framebuffer, power, ECC/XID errors, clock-throttle reasons, PCIe replay), training telemetry from a PyTorch callback (`step`, `loss`, `gradient_norm`, `learning_rate`, `throughput_tps`, `mfu_pct`), and DiLoCo-specific metrics (inner/outer step, pseudo-grad norm, sync duration, worker-speed ratio). Training scripts can also push user-defined custom metrics (e.g. `eval_bpb`, `dataloader_wait_ms`) directly to the backend over REST.
+A Rust sidecar polls the host every second and forwards three streams to the backend over gRPC: GPU hardware counters (temperature, utilization, framebuffer, power, ECC/XID errors, clock-throttle reasons, PCIe replay), training telemetry from a PyTorch callback (`step`, `loss`, `gradient_norm`, `learning_rate`, `throughput_tps`, `mfu_pct`), and DiLoCo-specific metrics (inner/outer step, pseudo-grad norm, sync duration, worker-speed ratio). Training scripts can also push user-defined custom metrics and full metrics batches directly to the backend over authenticated REST.
 
 ## Anomalies covered
 
@@ -18,6 +18,10 @@ A Rust sidecar polls the host every second and forwards three streams to the bac
 ## What the nanochat demo proves
 
 The script wires up backend, dashboard, and an Apple Silicon sidecar with a real `job_id`, registers a "Nanochat MPS demo" job, and (optionally) launches `training/train_mps.py` to train a tiny GPT on MPS. A reviewer opens `/training` and sees the active run with live loss / grad-norm / throughput / MFU charts; `/nodes/node-0` shows live MPS utilization and Metal framebuffer; `/policies` shows the preset library plus the new custom-metric source; and `/alerts` collects anything the detectors raise. The script is idempotent — running it again with the backend already up will reuse the running services and just register a new job.
+
+## What the Colab demo proves
+
+The Training page includes a downloadable `solprobe_colab_t4_demo.ipynb` notebook. In Colab, select a T4 runtime, point `BACKEND_URL` at a public SolProbe backend, set the API key, and run all cells. The notebook trains a tiny PyTorch MLP and posts GPU/training batches to `/api/v1/metrics/batches`, so the dashboard shows a `Google Colab T4 tiny training` run without installing or running the Rust sidecar inside Colab.
 
 ## How to run
 
@@ -36,8 +40,12 @@ cd dashboard && npm install && cd ..
 Launch the demo:
 
 ```bash
-bash scripts/demo_nanochat_solprobe.sh
+make demo
 ```
+
+Open `http://localhost:3000` and sign in with `solprobe-demo-key`.
+
+For the Colab path, expose backend port `8000` with a tunnel or deployment, then download the notebook from `http://localhost:3000/colab/solprobe_colab_t4_demo.ipynb`.
 
 To also run the MPS trainer (writes real training metrics into the mmap the sidecar reads):
 
@@ -51,7 +59,8 @@ The script logs each component to `.runs/<run_id>/{backend,dashboard,sidecar,tra
 
 - Apple Silicon GPU temperature and power are not exposed by Metal, so those fields render as `—` instead of `0`.
 - All state is in-memory; restarting the backend wipes alerts, diagnoses, jobs, and custom metrics. There is no Postgres persistence yet.
-- Custom metrics V0 is REST-only; they don't flow through the sidecar/protobuf path.
+- Colab free GPU availability is best-effort; if Colab assigns CPU, the notebook still runs but reports zero GPU utilization.
+- Custom metrics and Colab metrics batch ingest are REST paths; they don't flow through the sidecar/protobuf path.
 - The Solana trust layer (4 Anchor programs for attestation, escrow, reputation, staking) is demo-stage — included to validate the design, not wired into the production reward loop.
-- There is no auth or RBAC; the dashboard and REST API trust whoever can reach the port.
+- Local API-key auth protects REST and WebSocket control-plane surfaces. There is no multi-user RBAC yet.
 - Diagnosis defaults to a local heuristic fallback if `ANTHROPIC_API_KEY` isn't set, so the demo runs without external network calls.

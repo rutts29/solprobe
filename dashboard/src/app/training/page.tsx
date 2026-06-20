@@ -5,12 +5,17 @@ import { RunPanel } from "@/components/training/run-panel";
 import { CustomMetricsCard } from "@/components/training/custom-metrics-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveJob, useJobSummary } from "@/hooks/use-job-summary";
 import { useCustomMetrics } from "@/hooks/use-custom-metrics";
-import type { JobStatus } from "@/lib/types";
+import { formatRelativeTime } from "@/lib/utils";
+import type { AlertModel, JobStatus } from "@/lib/types";
 
-const DEMO_COMMAND = "bash scripts/demo_nanochat_solprobe.sh";
+const DEMO_COMMAND = "make demo";
+const COLAB_NOTEBOOK_URL = "/colab/solprobe_colab_t4_demo.ipynb";
 
 function statusTone(status?: JobStatus): "default" | "secondary" | "destructive" | "outline" {
   if (status === "running") return "default";
@@ -28,6 +33,48 @@ function fmtDuration(ms: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
+}
+
+function alertSeverityVariant(severity: AlertModel["severity"]): "default" | "secondary" | "destructive" {
+  if (severity === "CRITICAL") return "destructive";
+  if (severity === "WARNING") return "default";
+  return "secondary";
+}
+
+function ColabQuickstartCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base">Google Colab T4</CardTitle>
+          <Badge variant="info">REST client</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Run a tiny PyTorch training job on a free Colab GPU and stream GPU plus training telemetry into this dashboard.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href={COLAB_NOTEBOOK_URL}
+            download
+            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Download notebook
+          </a>
+          <a
+            href="/training"
+            className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+          >
+            View run
+          </a>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Colab needs a public backend URL. Use a deployed backend or expose local port 8000 with your tunnel of choice.
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function TrainingPage() {
@@ -59,11 +106,41 @@ export default function TrainingPage() {
     () => Object.entries(job?.config ?? {}),
     [job]
   );
+  const alertColumns = useMemo<DataTableColumn<AlertModel>[]>(
+    () => [
+      {
+        key: "severity",
+        header: "Severity",
+        cell: (alert) => <Badge variant={alertSeverityVariant(alert.severity)}>{alert.severity}</Badge>,
+      },
+      {
+        key: "type",
+        header: "Type",
+        cell: (alert) => <span className="font-mono text-xs text-muted-foreground">{alert.alert_type}</span>,
+      },
+      {
+        key: "description",
+        header: "Description",
+        cell: (alert) => alert.description,
+      },
+      {
+        key: "time",
+        header: "Time",
+        align: "right",
+        cell: (alert) => (
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            {formatRelativeTime(alert.timestamp_ms)}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
 
   if (jobLoading) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Training</h1>
+        <PageHeader title="Training" eyebrow="Monitoring / Training" subtitle="Live job metrics and custom training telemetry." />
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -72,36 +149,32 @@ export default function TrainingPage() {
   if (!job) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Training</h1>
+        <PageHeader title="Training" eyebrow="Monitoring / Training" subtitle="Live job metrics and custom training telemetry." />
         <Card>
-          <CardHeader><CardTitle>No active training run</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Register a job and start a sidecar to begin monitoring. The bundled demo runs nanochat on Apple Silicon.
-            </p>
-            <pre className="rounded-md bg-muted p-3 text-xs font-mono">{DEMO_COMMAND}</pre>
+            <EmptyState
+              title="No active training run"
+              description="Register a job and start a sidecar to begin monitoring. The bundled demo runs nanochat on Apple Silicon."
+              action={<code className="rounded-md border bg-muted px-2 py-1 font-mono text-xs text-primary">{DEMO_COMMAND}</code>}
+            />
           </CardContent>
         </Card>
+        <ColabQuickstartCard />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{job.name ?? job.job_id}</h1>
-          <div className="text-sm text-muted-foreground font-mono mt-1">{job.job_id}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          {job.status && <Badge variant={statusTone(job.status)}>{job.status}</Badge>}
-          {summary && (
-            <span className="text-xs text-muted-foreground">
-              duration {fmtDuration(summary.run_duration_ms)}
-            </span>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={job.name ?? job.job_id}
+        eyebrow="Monitoring / Training"
+        subtitle={<span className="font-mono text-xs">{job.job_id}</span>}
+        badge={job.status ? <Badge variant={statusTone(job.status)}>{job.status}</Badge> : undefined}
+        meta={summary ? [{ children: `duration ${fmtDuration(summary.run_duration_ms)}` }] : undefined}
+      />
+
+      <ColabQuickstartCard />
 
       {configEntries.length > 0 && (
         <Card>
@@ -163,29 +236,13 @@ export default function TrainingPage() {
         </CardHeader>
         <CardContent>
           {alerts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No alerts.</p>
+            <EmptyState title="No alerts" description="Alerts scoped to this training run will appear here." className="py-8" />
           ) : (
-            <ul className="space-y-2">
-              {alerts.slice(0, 10).map((a) => (
-                <li key={a.alert_id} className="flex items-start gap-3 text-sm">
-                  <Badge
-                    variant={
-                      a.severity === "CRITICAL"
-                        ? "destructive"
-                        : a.severity === "WARNING"
-                        ? "default"
-                        : "secondary"
-                    }
-                  >
-                    {a.severity}
-                  </Badge>
-                  <span className="font-mono text-xs text-muted-foreground shrink-0">
-                    {a.alert_type}
-                  </span>
-                  <span className="flex-1">{a.description}</span>
-                </li>
-              ))}
-            </ul>
+            <DataTable
+              columns={alertColumns}
+              rows={alerts.slice(0, 10)}
+              rowKey={(alert) => alert.alert_id}
+            />
           )}
           {diagnoses.length > 0 && (
             <p className="mt-3 text-xs text-muted-foreground">

@@ -16,7 +16,7 @@ interface RecentAlertsProps {
 export function RecentAlerts({ alerts, loading, onSelectAlert }: RecentAlertsProps) {
   if (loading) {
     return (
-      <Card>
+      <Card className="min-w-0">
         <CardHeader><CardTitle>Recent Alerts</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
@@ -26,7 +26,7 @@ export function RecentAlerts({ alerts, loading, onSelectAlert }: RecentAlertsPro
   }
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Recent Alerts</CardTitle>
         <span className="text-xs text-muted-foreground">{alerts.length} total</span>

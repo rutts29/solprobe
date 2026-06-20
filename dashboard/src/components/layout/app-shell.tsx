@@ -85,9 +85,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         collapsed={collapsed}
         onToggle={() => setCollapsed((c) => !c)}
       />
-      <div className={cn("transition-all duration-200", collapsed ? "ml-16" : "ml-60")}>
+      <div className={cn("transition-all duration-200", collapsed ? "ml-16" : "ml-16 md:ml-60")}>
         <Header wsConnected={ws.connected} criticalAlerts={criticalAlerts} />
-        <main className="p-6">{children}</main>
+        <main className="p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

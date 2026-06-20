@@ -109,6 +109,7 @@ class SolProbeCallback:
         mmap_dir: str | Path | None = None,
         job_id: str | None = None,
         backend_url: str | None = None,
+        api_key: str | None = None,
     ) -> None:
         self.node_id = node_id
         self.peak_tps = peak_tps
@@ -116,6 +117,7 @@ class SolProbeCallback:
         self.backend_url = backend_url or os.environ.get(
             "SOLPROBE_BACKEND_URL", "http://localhost:8000"
         )
+        self.api_key = api_key or os.environ.get("SOLPROBE_API_KEY")
         self._mmap_dir = Path(mmap_dir or os.environ.get("SOLPROBE_MMAP_DIR", "/tmp"))
         self._mmap_dir.mkdir(parents=True, exist_ok=True)
         self._path = self._mmap_dir / f"solprobe_training_{node_id}.bin"
@@ -238,10 +240,13 @@ class SolProbeCallback:
 
         def _send() -> None:
             try:
+                headers = {"Content-Type": "application/json"}
+                if self.api_key:
+                    headers["X-SolProbe-API-Key"] = self.api_key
                 req = _urlrequest.Request(
                     url,
                     data=json.dumps(payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                     method="POST",
                 )
                 with _urlrequest.urlopen(req, timeout=2.0):

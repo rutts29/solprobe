@@ -43,7 +43,7 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="min-w-0">
         <CardHeader><CardTitle>Cluster Nodes</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
@@ -53,7 +53,7 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
   }
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Cluster Nodes</CardTitle>
         <div className="flex items-center gap-1 rounded-md border bg-background p-0.5 text-xs">
