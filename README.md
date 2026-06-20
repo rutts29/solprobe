@@ -139,6 +139,10 @@ npm install && npm run dev
 # Open http://localhost:3000
 ```
 
+### Public Status Page
+
+SolProbe’s customer-facing status page should be hosted outside this app, for example on an incident.io status page or a custom status subdomain. Set `NEXT_PUBLIC_STATUS_PAGE_URL` in `dashboard/.env` so the dashboard’s Status nav and health pill link to that external page. The in-app `/status` view is only an authenticated ops shortcut and is not reliable if SolProbe itself is down.
+
 ### 5. Google Colab T4 Demo
 
 The dashboard includes a bundled notebook at `/colab/solprobe_colab_t4_demo.ipynb`.
@@ -149,7 +153,7 @@ See `docs/colab.md` for the full flow.
 ### 6. LLM Diagnosis (Optional)
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
+export ANTHROPIC_API_KEY="your-anthropic-api-key"
 # Restart backend — auto-diagnosis loop activates for CRITICAL alerts
 ```
 

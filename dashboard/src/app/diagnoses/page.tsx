@@ -47,7 +47,7 @@ export default function DiagnosesPage() {
         subtitle="LLM-grounded root-cause analyses with evidence chains and recommended actions."
       />
 
-      {error && <ErrorBanner title="Couldn't load diagnoses" message={error} onRetry={refresh} />}
+      {error && <ErrorBanner title="Could not load diagnoses" message={error} onRetry={refresh} />}
 
       <Toolbar>
         <SegmentedControl<string>

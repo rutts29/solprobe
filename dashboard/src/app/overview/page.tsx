@@ -29,7 +29,7 @@ export default function OverviewPage() {
   useEffect(() => {
     fetchHealth()
       .then(setHealth)
-      .catch((err) => setHealthError(err instanceof Error ? err.message : "Failed to fetch health"));
+      .catch((err) => setHealthError(err instanceof Error ? err.message : "Health check failed"));
   }, []);
 
   // Append a sample whenever nodes update (i.e. every poll cycle from useNodes).
@@ -61,7 +61,7 @@ export default function OverviewPage() {
         ]}
       />
 
-      {healthError && <ErrorBanner message={`Backend unreachable: ${healthError}`} />}
+      {healthError && <ErrorBanner title="Backend unreachable" message={healthError} />}
 
       <KpiStrip nodes={nodes} alerts={alerts} health={health} history={history} />
 

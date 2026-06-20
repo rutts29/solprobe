@@ -24,7 +24,7 @@ export function ThroughputChart({ data }: ThroughputChartProps) {
           <YAxis yAxisId="right" orientation="right" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} domain={[0, 100]} />
           <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
           <Line yAxisId="left" type="monotone" dataKey="throughput" stroke="var(--ok)" strokeWidth={2} dot={false} name="Tokens/sec" />
-          <Line yAxisId="right" type="monotone" dataKey="mfu" stroke="#8b5cf6" strokeWidth={2} dot={false} name="MFU %" />
+          <Line yAxisId="right" type="monotone" dataKey="mfu" stroke="var(--brand)" strokeWidth={2} dot={false} name="MFU %" />
         </LineChart>
       </ResponsiveContainer>
     </div>

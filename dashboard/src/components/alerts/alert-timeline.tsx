@@ -114,7 +114,7 @@ export function AlertTimeline({ alerts, diagnoses = [], onSelectAlert, onDiagnos
                   {diagnosing.has(alert.alert_id) ? "Diagnosing..." : "Diagnose"}
                 </Button>
                 {errors[alert.alert_id] && (
-                  <span className="text-xs text-red-400">{errors[alert.alert_id]}</span>
+                  <span className="text-xs text-[var(--crit)]">{errors[alert.alert_id]}</span>
                 )}
               </div>
             </div>

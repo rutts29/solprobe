@@ -83,7 +83,7 @@ export function AlertDetail({ alert, onClose, initialDiagnosis = null, onLifecyc
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto border-l bg-card shadow-xl">
+    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto border-l bg-background shadow-xl">
       <div className="flex items-center justify-between border-b p-4">
         <h2 className="font-semibold">Alert Detail</h2>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -130,7 +130,7 @@ export function AlertDetail({ alert, onClose, initialDiagnosis = null, onLifecyc
 
         {/* Enrichment error */}
         {enrichedError && (
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
+          <div className="rounded-md border border-[var(--warn)]/30 bg-[var(--warn-soft)] p-3 text-sm text-[var(--warn)]">
             Failed to load enriched data: {enrichedError}
           </div>
         )}
@@ -183,7 +183,7 @@ export function AlertDetail({ alert, onClose, initialDiagnosis = null, onLifecyc
             )}
             {diagnosisNotFound && (
               <Button onClick={handleRequestDiagnosis} disabled={requesting}>
-                {requesting ? "Requesting..." : "Request Diagnosis"}
+                {requesting ? "Requesting..." : "Request diagnosis"}
               </Button>
             )}
           </div>

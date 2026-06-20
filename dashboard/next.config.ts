@@ -6,8 +6,6 @@ const nextConfig: NextConfig = {
   output: "standalone",
   async rewrites() {
     return {
-      // beforeFiles → precedes app router. Serves the static designer-authored
-      // landing HTML at "/" without the AppShell layout wrapping it.
       beforeFiles: [
         { source: "/", destination: "/landing.html" },
       ],

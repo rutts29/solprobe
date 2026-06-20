@@ -1,0 +1,15 @@
+{
+  "redirects": [
+    { "source": "/overview", "destination": "/", "permanent": false },
+    { "source": "/nodes", "destination": "/", "permanent": false },
+    { "source": "/nodes/:path*", "destination": "/", "permanent": false },
+    { "source": "/alerts", "destination": "/", "permanent": false },
+    { "source": "/diagnoses", "destination": "/", "permanent": false },
+    { "source": "/training", "destination": "/", "permanent": false },
+    { "source": "/policies", "destination": "/", "permanent": false },
+    { "source": "/attestations", "destination": "/", "permanent": false },
+    { "source": "/status", "destination": "/", "permanent": false },
+    { "source": "/api/:path*", "destination": "/", "permanent": false },
+    { "source": "/ws/:path*", "destination": "/", "permanent": false }
+  ]
+}

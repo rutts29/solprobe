@@ -8,8 +8,10 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { PageHeader } from "@/components/ui/page-header";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { formatTimestamp } from "@/lib/utils";
 import type { ReactNode } from "react";
 import {
@@ -252,7 +254,7 @@ export default function PoliciesPage() {
   }
 
   async function handleDelete(policyId: string) {
-    if (!window.confirm(`Delete policy "${policyId}"?`)) return;
+    if (!window.confirm(`Delete policy "${policyId}"? This cannot be undone.`)) return;
     try {
       await deletePolicy(policyId);
       await refresh();
@@ -356,7 +358,7 @@ export default function PoliciesPage() {
           onClick={() => handleToggle(p.policy_id)}
           className={`rounded-md border px-2 py-1 text-xs ${
             p.enabled
-              ? "border-green-500/30 bg-green-500/10 text-green-400"
+              ? "border-[var(--ok)]/30 bg-[var(--ok-soft)] text-[var(--ok)]"
               : "border-border bg-muted text-muted-foreground"
           }`}
         >
@@ -389,7 +391,7 @@ export default function PoliciesPage() {
         actions={<Button onClick={() => openCreateDrawer()}>New policy</Button>}
       />
 
-      {error && <ErrorBanner title="Policy request failed" message={error} />}
+      {error && <ErrorBanner title="Could not update policies" message={error} />}
 
       <Card>
         <CardHeader>
@@ -406,7 +408,7 @@ export default function PoliciesPage() {
                   size="sm"
                   disabled={exists}
                   onClick={() => openCreateDrawer(p.body)}
-                  title={exists ? "Already added" : "Click to fill the form"}
+                  title={exists ? "Already added" : "Use this preset"}
                 >
                   {p.label}
                   {exists && <span className="ml-2 text-xs text-muted-foreground">(added)</span>}
@@ -423,7 +425,7 @@ export default function PoliciesPage() {
         </CardHeader>
         <CardContent>
           {policies.length === 0 ? (
-            <EmptyState title="No policies yet" description="Click a preset above or create a custom monitoring policy." />
+            <EmptyState title="No policies yet" description="Use a preset above or create a custom monitoring policy." />
           ) : (
             <DataTable
               columns={policyColumns}
@@ -442,7 +444,7 @@ export default function PoliciesPage() {
           <div
             role="dialog"
             aria-modal="true"
-            className="absolute right-0 top-0 h-full w-full max-w-md border-l bg-card p-6 overflow-y-auto"
+            className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l bg-background p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-2 mb-4">
@@ -456,9 +458,9 @@ export default function PoliciesPage() {
 
             <div className="space-y-4">
               <Field label="Policy ID">
-                <input
+                <Input
                   type="text"
-                  className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
+                  className="font-mono"
                   value={form.policy_id}
                   disabled={!!editingId}
                   onChange={(e) => setForm({ ...form, policy_id: e.target.value })}
@@ -466,9 +468,8 @@ export default function PoliciesPage() {
               </Field>
 
               <Field label="Name">
-                <input
+                <Input
                   type="text"
-                  className="h-8 w-full rounded-md border bg-background px-2.5 text-sm"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
@@ -498,11 +499,11 @@ export default function PoliciesPage() {
                 <Field label={form.metric.source === "custom" ? "Metric name" : "Field"}>
                   {form.metric.source === "custom" ? (
                     <>
-                      <input
+                      <Input
                         type="text"
                         list="policy-custom-metric-names"
                         placeholder="e.g. eval_bpb"
-                        className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
+                        className="font-mono"
                         value={form.metric.field}
                         onChange={(e) =>
                           setForm({
@@ -560,10 +561,10 @@ export default function PoliciesPage() {
 
               {form.condition.operator !== "stale_for" && (
                 <Field label="Threshold">
-                  <input
+                  <Input
                     type="number"
                     step="any"
-                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
+                    className="font-mono"
                     value={form.condition.threshold}
                     onChange={(e) =>
                       setForm({
@@ -576,11 +577,11 @@ export default function PoliciesPage() {
               )}
 
               <Field label="Duration (seconds)">
-                <input
+                <Input
                   type="number"
                   step="1"
                   min="0"
-                  className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
+                  className="font-mono"
                   value={form.condition.for_seconds}
                   onChange={(e) =>
                     setForm({
@@ -608,11 +609,11 @@ export default function PoliciesPage() {
                   </Select>
                 </Field>
                 <Field label="Cooldown (seconds)">
-                  <input
+                  <Input
                     type="number"
                     min="0"
                     step="1"
-                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
+                    className="font-mono"
                     value={form.cooldown_seconds}
                     onChange={(e) =>
                       setForm({ ...form, cooldown_seconds: parseFloat(e.target.value) || 0 })
@@ -623,10 +624,10 @@ export default function PoliciesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Scope: node_id">
-                  <input
+                  <Input
                     type="text"
                     placeholder="(any)"
-                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
+                    className="font-mono"
                     value={form.scope?.node_id ?? ""}
                     onChange={(e) =>
                       setForm({
@@ -640,10 +641,10 @@ export default function PoliciesPage() {
                   />
                 </Field>
                 <Field label="Scope: job_id">
-                  <input
+                  <Input
                     type="text"
                     placeholder="(any)"
-                    className="h-8 w-full rounded-md border bg-background px-2.5 text-sm font-mono"
+                    className="font-mono"
                     value={form.scope?.job_id ?? ""}
                     onChange={(e) =>
                       setForm({
@@ -659,9 +660,8 @@ export default function PoliciesPage() {
               </div>
 
               <Field label="Description">
-                <textarea
+                <Textarea
                   rows={2}
-                  className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
                   value={form.description ?? ""}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />

@@ -1,6 +1,6 @@
 "use client";
 
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { GpuMetrics } from "@/lib/types";
 
 interface UtilizationChartProps {
@@ -14,20 +14,31 @@ export function UtilizationChart({ data }: UtilizationChartProps) {
     smActive: d.sm_active_pct,
     tensorActive: d.tensor_active_pct,
   }));
+  const overlapping =
+    chartData.length > 0 &&
+    chartData.every((d) => d.utilization === d.smActive && d.smActive === d.tensorActive);
 
   return (
-    <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="time" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
-          <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} domain={[0, 100]} />
-          <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
-          <Area type="monotone" dataKey="utilization" stroke="var(--info)" fill="var(--info)" fillOpacity={0.2} strokeWidth={2} name="GPU Util %" />
-          <Area type="monotone" dataKey="smActive" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.15} strokeWidth={1} name="SM Active %" />
-          <Area type="monotone" dataKey="tensorActive" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.15} strokeWidth={1} name="Tensor Active %" />
-        </AreaChart>
-      </ResponsiveContainer>
+    <div>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="time" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} />
+            <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} domain={[0, 100]} />
+            <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: "6px", color: "var(--popover-foreground)" }} />
+            <Legend wrapperStyle={{ color: "var(--muted-foreground)", fontSize: 11 }} />
+            <Line type="monotone" dataKey="utilization" stroke="var(--info)" strokeWidth={2} dot={false} name="GPU Util %" />
+            <Line type="monotone" dataKey="smActive" stroke="var(--brand)" strokeWidth={2} dot={false} strokeDasharray="5 3" name="SM Active %" />
+            <Line type="monotone" dataKey="tensorActive" stroke="var(--warn)" strokeWidth={2} dot={false} strokeDasharray="2 3" name="Tensor Active %" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      {overlapping && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          All utilization series currently match in the source samples.
+        </p>
+      )}
     </div>
   );
 }

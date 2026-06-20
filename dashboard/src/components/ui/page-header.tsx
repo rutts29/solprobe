@@ -18,11 +18,11 @@ export interface PageHeaderProps {
 }
 
 const TONE_DOT: Record<NonNullable<PageMetaChip["tone"]>, string> = {
-  ok: "bg-emerald-500",
-  warn: "bg-amber-500",
-  crit: "bg-red-500",
-  info: "bg-blue-500",
-  muted: "bg-zinc-500",
+  ok: "bg-[var(--ok)]",
+  warn: "bg-[var(--warn)]",
+  crit: "bg-[var(--crit)]",
+  info: "bg-[var(--info)]",
+  muted: "bg-muted-foreground",
 };
 
 export function PageHeader({

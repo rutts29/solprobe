@@ -201,6 +201,52 @@ class TestAnomaliesEndpoint:
         assert len(data) == 1
 
 
+class TestIncidentIoEndpoint:
+    async def test_incident_io_requires_configuration(self, client, monkeypatch):
+        monkeypatch.delenv("INCIDENT_IO_API_KEY", raising=False)
+
+        resp = await client.post(
+            "/api/v1/incident-io/incidents",
+            json={"service": "SolProbe backend API", "status": "down"},
+        )
+
+        assert resp.status_code == 503
+
+    async def test_incident_io_creates_solprobe_service_incident(self, client, monkeypatch):
+        monkeypatch.setenv("INCIDENT_IO_API_KEY", "incident-test-key")
+        captured = {}
+
+        def fake_post(payload):
+            captured.update(payload)
+            return {
+                "incident": {
+                    "id": "inc_service",
+                    "reference": "INC-456",
+                    "permalink": "https://app.incident.io/incidents/456",
+                }
+            }
+
+        import app.api.routes as routes_mod
+
+        monkeypatch.setattr(routes_mod, "_post_incident_io_json", fake_post)
+
+        resp = await client.post(
+            "/api/v1/incident-io/incidents",
+            json={
+                "service": "SolProbe backend API",
+                "status": "down",
+                "summary": "Backend health checks are failing.",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["reference"] == "INC-456"
+        assert captured["mode"] == "test"
+        assert captured["visibility"] == "public"
+        assert captured["name"] == "SolProbe service down: SolProbe backend API"
+        assert "Source: SolProbe status page" in captured["summary"]
+
+
 class TestJobsEndpoint:
     async def test_create_job(self, client):
         resp = await client.post(

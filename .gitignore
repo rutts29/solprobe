@@ -36,3 +36,9 @@ backend/.venv/
 
 # Demo run logs
 .runs/
+
+# Local assistant/tooling artifacts
+.codex/
+.playwright-cli/
+output/
+AGENTS.md

@@ -58,7 +58,7 @@ export function DataTable<T>({
           {rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="px-3 py-8 text-center text-sm text-muted-foreground">
-                {empty ?? "No data"}
+                {empty ?? "No rows yet"}
               </td>
             </tr>
           ) : (
