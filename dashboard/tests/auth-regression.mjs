@@ -5,7 +5,9 @@ import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
 const require = createRequire(import.meta.url);
-const { createHandler } = require("../../landing/api/request-demo.js");
+const staticRequestDemoHandler = require("../../landing/api/request-demo.js");
+const { config: staticRequestDemoConfig, createHandler } = staticRequestDemoHandler;
+const { POST: postDashboardRequestDemo } = await import(new URL("../src/app/api/request-demo/route.ts", import.meta.url));
 const landing = await readFile(new URL("../public/landing.html", import.meta.url), "utf8");
 const sourceLanding = await readFile(new URL("../../landing/index.html", import.meta.url), "utf8");
 const websocket = await readFile(new URL("../src/lib/websocket.tsx", import.meta.url), "utf8");
@@ -26,6 +28,14 @@ function responseRecorder() {
       return this;
     },
   };
+}
+
+function dashboardRequest(body, headers = {}) {
+  return new Request("https://solprobe.test/api/request-demo", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body,
+  });
 }
 
 test("public landing stays request-demo only", () => {
@@ -182,6 +192,65 @@ test("request-demo endpoint rejects invalid input, ignores honeypots, and protec
     body: { email: "reviewer@example.com" },
   }, unconfigured);
   assert.equal(unconfigured.statusCode, 503);
+});
+
+test("static request-demo handler limits parser and actual payload size", async () => {
+  assert.deepEqual(staticRequestDemoConfig, {
+    api: {
+      bodyParser: {
+        sizeLimit: "16kb",
+      },
+    },
+  });
+
+  let calls = 0;
+  const handler = createHandler({
+    env: {
+      RESEND_API_KEY: "test-key",
+      REQUEST_DEMO_TO_EMAIL: "owner@example.com",
+      REQUEST_DEMO_FROM_EMAIL: "SolProbe <demo@example.com>",
+    },
+    fetchImpl: async () => {
+      calls += 1;
+      return { ok: true };
+    },
+  });
+  const oversized = JSON.stringify({ email: "reviewer@example.com", interest: "x".repeat(16 * 1024) });
+  for (const headers of [{}, { "content-length": "1" }]) {
+    const response = responseRecorder();
+    await handler({ method: "POST", headers, body: oversized }, response);
+    assert.equal(response.statusCode, 413);
+    assert.deepEqual(response.body, { error: "Request is too large." });
+  }
+
+  assert.equal(calls, 0);
+});
+
+test("dashboard request-demo route rejects non-object JSON", async () => {
+  for (const body of ["null", "[]", '["reviewer@example.com"]', '"reviewer@example.com"', "42"]) {
+    const response = await postDashboardRequestDemo(dashboardRequest(body));
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "Enter a valid email address." });
+  }
+});
+
+test("dashboard request-demo route limits streamed bytes without trusting content-length", async () => {
+  const oversized = JSON.stringify({ email: "reviewer@example.com", interest: "x".repeat(16 * 1024) });
+  const missingLength = dashboardRequest(oversized);
+  assert.equal(missingLength.headers.get("content-length"), null);
+  const missingLengthResponse = await postDashboardRequestDemo(missingLength);
+  assert.equal(missingLengthResponse.status, 413);
+  assert.deepEqual(await missingLengthResponse.json(), { error: "Request is too large." });
+
+  const misleadingLength = dashboardRequest(oversized, { "content-length": "1" });
+  const misleadingLengthResponse = await postDashboardRequestDemo(misleadingLength);
+  assert.equal(misleadingLengthResponse.status, 413);
+  assert.deepEqual(await misleadingLengthResponse.json(), { error: "Request is too large." });
+
+  const declaredOversize = dashboardRequest("{}", { "content-length": "16385" });
+  const response = await postDashboardRequestDemo(declaredOversize);
+  assert.equal(response.status, 413);
+  assert.equal(declaredOversize.bodyUsed, false);
 });
 
 test("tracked landing copies stay synchronized", () => {

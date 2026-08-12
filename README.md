@@ -12,7 +12,7 @@ The following commands were run locally on 2026-08-12:
 |---|---:|---|
 | Rust sidecar | 32 passed | `cd sidecar && cargo test` |
 | Python backend | 296 passed, 1 deprecation warning | `backend/.venv/bin/python -m pytest backend/tests/ -q` |
-| Dashboard regression | 14 passed | `cd dashboard && npm test` |
+| Dashboard regression | 17 passed | `cd dashboard && npm test` |
 | Dashboard type check | passed | `cd dashboard && npx tsc --noEmit` |
 | Dashboard lint | passed | `cd dashboard && npm run lint` |
 
@@ -69,10 +69,17 @@ cargo run -- --apple-gpu --node-id node-mac
 The project launcher is intended to start the local dashboard, backend, and Apple Silicon sidecar:
 
 ```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+cd ../dashboard
+npm install
+cd ..
 make demo
 ```
 
-It uses the local demo API key unless `SOLPROBE_API_KEY` is supplied. This is a development convenience, not a public deployment flow.
+These dependency-installation steps are required for a fresh clone because the launcher expects `backend/.venv` and `dashboard/node_modules`. It uses the local demo API key unless `SOLPROBE_API_KEY` is supplied. This is a development convenience, not a public deployment flow.
 
 To exercise the small bundled trainer, install PyTorch in a local environment and run:
 
@@ -104,7 +111,7 @@ REQUEST_DEMO_FROM_EMAIL=
 
 `landing/.env.example` provides the same blank keys for local Vercel development.
 
-`REQUEST_DEMO_FROM_EMAIL` must be a sender address from a domain verified in Resend. The submitted payload contains a required email, optional name/role/interest, and a hidden `botcheck` honeypot. The endpoint validates input, silently accepts honeypot submissions, and returns clear success or error states without logging request contents. Until those Vercel variables are configured, the form responds that demo requests are not configured; it does not use a public key or a hard-coded email fallback.
+`REQUEST_DEMO_FROM_EMAIL` must be a sender address from a domain verified in Resend. The submitted payload contains a required email, optional name/role/interest, and a hidden `botcheck` honeypot. Both endpoints limit the incoming form body to 16 KB; the Next.js route counts streamed bytes before parsing, and the static Vercel function configures its JSON body parser to the same limit. The endpoint validates input, silently accepts honeypot submissions, and returns clear success or error states without logging request contents. Until those Vercel variables are configured, the form responds that demo requests are not configured; it does not use a public key or a hard-coded email fallback.
 
 ## API surface
 

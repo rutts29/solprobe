@@ -1,5 +1,13 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_REQUEST_BODY_BYTES = 16 * 1024;
 const ROLES = new Set(["", "ML engineer", "Researcher", "AI infrastructure", "Other"]);
+const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "16kb",
+    },
+  },
+};
 
 function respond(response, status, body) {
   response.status(status).json(body);
@@ -9,16 +17,44 @@ function text(value, maxLength) {
   return String(value ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, maxLength);
 }
 
+function contentLength(request) {
+  const headers = request.headers;
+  const value = typeof headers?.get === "function"
+    ? headers.get("content-length")
+    : headers?.["content-length"] ?? headers?.["Content-Length"];
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+
+  const bytes = Number(value);
+  return Number.isSafeInteger(bytes) ? bytes : Number.POSITIVE_INFINITY;
+}
+
+function serializedByteLength(body) {
+  if (body === undefined) return 0;
+
+  try {
+    const serialized = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
+    return typeof serialized === "string" || Buffer.isBuffer(serialized)
+      ? Buffer.byteLength(serialized, "utf8")
+      : Number.POSITIVE_INFINITY;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
 function requestBody(request) {
-  if (typeof request.body === "string") {
+  if (contentLength(request) > MAX_REQUEST_BODY_BYTES || serializedByteLength(request.body) > MAX_REQUEST_BODY_BYTES) {
+    return { tooLarge: true };
+  }
+
+  if (typeof request.body === "string" || Buffer.isBuffer(request.body)) {
     try {
-      return JSON.parse(request.body);
+      return { body: JSON.parse(request.body.toString()) };
     } catch {
-      return null;
+      return { body: null };
     }
   }
 
-  return request.body && typeof request.body === "object" ? request.body : null;
+  return { body: request.body && typeof request.body === "object" ? request.body : null };
 }
 
 function createHandler({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
@@ -29,7 +65,13 @@ function createHandler({ env = process.env, fetchImpl = globalThis.fetch } = {})
       return;
     }
 
-    const body = requestBody(request);
+    const parsedRequest = requestBody(request);
+    if (parsedRequest.tooLarge) {
+      respond(response, 413, { error: "Request is too large." });
+      return;
+    }
+
+    const { body } = parsedRequest;
     if (!body) {
       respond(response, 400, { error: "Enter a valid email address." });
       return;
@@ -96,4 +138,5 @@ function createHandler({ env = process.env, fetchImpl = globalThis.fetch } = {})
 }
 
 module.exports = createHandler();
+module.exports.config = config;
 module.exports.createHandler = createHandler;
