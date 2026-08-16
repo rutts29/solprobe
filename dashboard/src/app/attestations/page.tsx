@@ -1,63 +1,45 @@
+// NEW: dashboard/src/app/attestations/page.tsx
+// Stub page wired to a fetcher. Replace `mockAttestations` with a real API call
+// once your on-chain endpoint ships (e.g. fetchAttestations() from lib/api.ts).
+
 "use client";
 
-import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/ui/page-header";
-import { Toolbar } from "@/components/ui/toolbar";
-import { SegmentedControl } from "@/components/ui/segmented-control";
-import { ErrorBanner } from "@/components/ui/error-banner";
-import { Badge } from "@/components/ui/badge";
+import { useState, useEffect } from "react";
 import { AttestationsTable, type Attestation } from "@/components/training/attestations-table";
-import { getDemoAttestations } from "@/lib/demo-attestations";
 
-type StatusFilter = "all" | Attestation["status"];
+// TODO: replace with real fetcher once the on-chain API ships.
+async function fetchAttestations(): Promise<Attestation[]> {
+  return [];
+}
 
 export default function AttestationsPage() {
-  const all = useMemo(() => getDemoAttestations(), []);
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [error] = useState<string | null>(null);
+  const [attestations, setAttestations] = useState<Attestation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const rows = useMemo(
-    () => (status === "all" ? all : all.filter((a) => a.status === status)),
-    [all, status],
-  );
-
-  const totalStaked = all.reduce((s, a) => s + a.staked_sol, 0);
-  const slashed = all.filter((a) => a.status === "slashed").length;
+  useEffect(() => {
+    let cancelled = false;
+    fetchAttestations()
+      .then((data) => { if (!cancelled) setAttestations(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Failed to fetch attestations"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Attestations"
-        eyebrow="On-chain"
-        subtitle="Each diagnosis is hashed, signed, and committed to Solana. Validators stake SOL on cluster health; false attestations are slashed."
-        badge={<Badge variant="outline" className="font-mono text-[10px]">devnet · sample</Badge>}
-        meta={[
-          { children: `${all.length} attestations` },
-          { children: `◎ ${totalStaked.toFixed(1)} staked` },
-          { tone: slashed > 0 ? "crit" : "ok", children: `${slashed} slashed` },
-        ]}
-      />
-
-      <div className="rounded-lg border border-[var(--warn)]/30 bg-[var(--warn-soft)] px-3 py-2 text-xs text-[var(--warn)]">
-        Showing sample data - the backend has no attestation endpoint yet. These rows demonstrate the on-chain trust layer.
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight">Attestations</h1>
+        <span className="text-xs text-muted-foreground font-mono">mainnet-beta</span>
       </div>
 
-      {error && <ErrorBanner message={error} />}
+      {error && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+          {error}
+        </div>
+      )}
 
-      <Toolbar>
-        <SegmentedControl<StatusFilter>
-          value={status}
-          onChange={setStatus}
-          options={[
-            { value: "all", label: "All" },
-            { value: "confirmed", label: "Confirmed" },
-            { value: "pending", label: "Pending" },
-            { value: "slashed", label: "Slashed" },
-          ]}
-        />
-      </Toolbar>
-
-      <AttestationsTable attestations={rows} loading={false} />
+      <AttestationsTable attestations={attestations} loading={loading} />
     </div>
   );
 }

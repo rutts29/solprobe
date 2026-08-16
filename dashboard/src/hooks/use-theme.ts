@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 
 type Theme = "dark" | "light";
 
+function getInitialTheme(defaultTheme: Theme): Theme {
+  if (typeof window === "undefined") return defaultTheme;
+  const stored = localStorage.getItem("solprobe-theme");
+  return stored === "dark" || stored === "light" ? stored : defaultTheme;
+}
+
 /** Standalone theme hook if you don't want to wrap with <ThemeProvider>. */
 export function useTheme(defaultTheme: Theme = "dark") {
-  const [theme, setThemeState] = useState<Theme>(defaultTheme);
-
-  useEffect(() => {
-    const stored = typeof window !== "undefined" ? (localStorage.getItem("solprobe-theme") as Theme | null) : null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrating theme from localStorage after SSR, one-time
-    if (stored === "dark" || stored === "light") setThemeState(stored);
-  }, []);
+  const [theme, setThemeState] = useState<Theme>(() => getInitialTheme(defaultTheme));
 
   useEffect(() => {
     if (typeof document === "undefined") return;
