@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SolProbe — Logo System (Ink & Ember)</title>
+<link rel="icon" href="assets/logo/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fafafa;
+    --card: #ffffff;
+    --fg: #0a0a0f;
+    --fg-2: #52525b;
+    --fg-3: #a1a1aa;
+    --border: #e4e4e7;
+    --ember: #FF6B35;
+    --ember-soft: #FFF4EE;
+    --ink: #0a0a0f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 56px 32px; }
+  h1 { font-size: 42px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 8px; }
+  h1 .ember { color: var(--ember); }
+  .lede { font-size: 17px; color: var(--fg-2); max-width: 640px; margin: 0 0 48px; }
+  h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-3); margin: 48px 0 16px; }
+
+  .grid { display: grid; gap: 16px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .card .caption { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 11px; color: var(--fg-3); }
+  .card .caption .name { font-weight: 600; color: var(--fg-2); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
+  .card .swatch { display: flex; align-items: center; justify-content: center; padding: 36px 16px; border-radius: 8px; min-height: 180px; }
+
+  .sw-light { background: #fafafa; border: 1px solid var(--border); }
+  .sw-dark { background: #0a0a0f; border: 1px solid #1f1f23; }
+  .sw-ember { background: var(--ember); }
+  .sw-grid {
+    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 16px 16px; background-position: -1px -1px; background-color: var(--card);
+  }
+
+  .size-row { display: flex; align-items: flex-end; gap: 32px; padding: 32px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; flex-wrap: wrap; }
+  .size-row > div { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .size-row .label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--fg-3); }
+
+  .word { display: flex; align-items: center; gap: 14px; font-size: 30px; font-weight: 700; letter-spacing: -0.025em; }
+  .word .fade { color: var(--fg-3); font-weight: 500; }
+  .word .mark { width: 44px; height: 44px; }
+  .word.inv { color: #fafafa; }
+  .word.inv .fade { color: #a1a1aa; }
+
+  .pal { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .pal .chip { border-radius: 10px; padding: 18px; height: 130px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid var(--border); }
+  .pal .chip .hex { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
+  .pal .chip .name { font-size: 11px; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .pal .chip .note { font-size: 10px; opacity: 0.65; margin-top: 4px; }
+
+  .donts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .dont { position: relative; padding: 32px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: center; min-height: 160px; }
+  .dont::after { content: ''; position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; background: #dc2626; background-image: linear-gradient(45deg, transparent 45%, #fff 45%, #fff 55%, transparent 55%); }
+  .dont .label { position: absolute; bottom: 12px; left: 14px; font-size: 11px; color: var(--fg-2); }
+
+  pre { background: #0a0a0f; color: #e4e4e7; border-radius: 10px; padding: 20px; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7; }
+  pre .c { color: #71717a; }
+  pre .k { color: #fda4af; }
+  pre .s { color: #86efac; }
+  pre .n { color: #fcd34d; }
+
+  .back { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-2); margin-bottom: 24px; }
+  .back:hover { color: var(--fg); }
+
+  .hero-mark { display: flex; align-items: center; gap: 24px; padding: 48px; background: var(--ink); border-radius: 16px; margin: 0 0 32px; }
+  .hero-mark img { width: 120px; height: 120px; }
+  .hero-mark .meta { color: #fafafa; }
+  .hero-mark .meta .k { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ember); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; display: block; }
+  .hero-mark .meta h3 { margin: 0 0 4px; font-size: 28px; font-weight: 700; letter-spacing: -0.025em; }
+  .hero-mark .meta p { margin: 0; color: #a1a1aa; font-size: 14px; max-width: 520px; }
+
+  @media (max-width: 900px) {
+    .grid-3, .grid-4, .pal, .donts { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="SolProbe Landing.html" class="back">← Back to landing</a>
+  <h1>Ink &amp; <span class="ember">Ember</span></h1>
+  <p class="lede">The SolProbe mark is a probe waveform with a single ember — the moment the edge sidecar spikes on a fault. Restrained, confident, and unambiguously about signal.</p>
+
+  <!-- Hero -->
+  <div class="hero-mark">
+    <img src="assets/logo/solprobe-mark.svg" alt="SolProbe">
+    <div class="meta">
+      <span class="k">Primary mark</span>
+      <h3>Sol<span style="color:#a1a1aa;font-weight:500;">Probe</span></h3>
+      <p>Ink (#0A0A0F) ground, white signal trace, single ember accent at the spike. The only color moment in the brand.</p>
+    </div>
+  </div>
+
+  <!-- ============ PRIMARY MARK ============ -->
+  <h2>Primary mark — surfaces</h2>
+  <div class="grid grid-3">
+    <div class="card">
+      <div class="swatch sw-light"><img src="assets/logo/solprobe-mark.svg" width="120" height="120" alt=""></div>
+      <div class="caption"><span class="name">On light</span><span class="mono">solprobe-mark.svg</span></div>
+    </div>
+    <div class="card">
+      <div class="swatch sw-dark"><img src="assets/logo/solprobe-mark.svg" width="120" height="120" alt=""></div>
+      <div class="caption"><span class="name">On dark</span><span class="mono">primary context</span></div>
+    </div>
+    <div class="card">
+      <div class="swatch sw-grid"><img src="assets/logo/solprobe-mark.svg" width="120" height="120" alt=""></div>
+      <div class="caption"><span class="name">Grid check</span><span class="mono">120×120 · r:24</span></div>
+    </div>
+  </div>
+
+  <!-- ============ WORDMARK ============ -->
+  <h2>Wordmark (lockup)</h2>
+  <div class="grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="card">
+      <div class="swatch sw-light" style="justify-content: flex-start; padding-left: 40px;">
+        <div class="word">
+          <img src="assets/logo/solprobe-mark.svg" class="mark" alt="">
+          <span>Sol<span class="fade">Probe</span></span>
+        </div>
+      </div>
+      <div class="caption"><span class="name">On light</span><span class="mono">solprobe-wordmark.svg</span></div>
+    </div>
+    <div class="card" style="background: #0a0a0f; border-color: #1f1f23;">
+      <div class="swatch" style="justify-content: flex-start; padding-left: 40px;">
+        <div class="word inv">
+          <img src="assets/logo/solprobe-mark.svg" class="mark" alt="">
+          <span>Sol<span class="fade">Probe</span></span>
+        </div>
+      </div>
+      <div class="caption" style="color:#71717a;"><span class="name" style="color:#a1a1aa;">On dark</span><span class="mono">solprobe-wordmark-dark.svg</span></div>
+    </div>
+  </div>
+
+  <!-- ============ MONO ============ -->
+  <h2>Monochrome variant</h2>
+  <p style="font-size:13px;color:var(--fg-2);margin-top:-8px;margin-bottom:16px;">Uses <code class="mono">currentColor</code> — inherits from CSS <code class="mono">color</code>. For print, greyscale, or tight embeds.</p>
+  <div class="grid grid-4">
+    <div class="card">
+      <div class="swatch sw-light" style="color: #0a0a0f;">
+        <img src="assets/logo/solprobe-mark-mono.svg" width="88" height="88" alt="">
+      </div>
+      <div class="caption"><span class="name">Ink</span><span class="mono">color: #0a0a0f</span></div>
+    </div>
+    <div class="card">
+      <div class="swatch" style="background:#f5f5f4; color: var(--ember);">
+        <img src="assets/logo/solprobe-mark-mono.svg" width="88" height="88" alt="">
+      </div>
+      <div class="caption"><span class="name">Ember tint</span><span class="mono">color: #FF6B35</span></div>
+    </div>
+    <div class="card" style="background:#0a0a0f; border-color:#1f1f23;">
+      <div class="swatch" style="color: #fafafa;">
+        <img src="assets/logo/solprobe-mark-mono.svg" width="88" height="88" alt="">
+      </div>
+      <div class="caption" style="color:#71717a;"><span class="name" style="color:#a1a1aa;">White</span><span class="mono">color: #fafafa</span></div>
+    </div>
+    <div class="card" style="background:var(--ember); border-color:transparent;">
+      <div class="swatch" style="color: #0a0a0f;">
+        <img src="assets/logo/solprobe-mark-mono.svg" width="88" height="88" alt="">
+      </div>
+      <div class="caption" style="color:#fff;"><span class="name" style="color:#fff;">On ember</span></div>
+    </div>
+  </div>
+
+  <!-- ============ SIZES ============ -->
+  <h2>Size ladder</h2>
+  <div class="size-row">
+    <div><img src="assets/logo/solprobe-mark.svg" width="16" height="16" alt=""><span class="label">16 — favicon</span></div>
+    <div><img src="assets/logo/solprobe-mark.svg" width="24" height="24" alt=""><span class="label">24 — nav</span></div>
+    <div><img src="assets/logo/solprobe-mark.svg" width="32" height="32" alt=""><span class="label">32 — app</span></div>
+    <div><img src="assets/logo/solprobe-mark.svg" width="48" height="48" alt=""><span class="label">48 — hero</span></div>
+    <div><img src="assets/logo/solprobe-mark.svg" width="72" height="72" alt=""><span class="label">72 — splash</span></div>
+    <div><img src="assets/logo/solprobe-mark.svg" width="112" height="112" alt=""><span class="label">112 — social</span></div>
+  </div>
+
+  <!-- ============ COLORS ============ -->
+  <h2>Brand palette</h2>
+  <div class="pal">
+    <div class="chip" style="background:#0a0a0f; color:#fff; border-color:transparent;">
+      <div><div class="name">Ink</div><div class="note">Primary ground, text on light</div></div>
+      <div class="hex">#0A0A0F</div>
+    </div>
+    <div class="chip" style="background:#FF6B35; color:#0a0a0f; border-color:transparent;">
+      <div><div class="name">Ember</div><div class="note">Accent only — the spike</div></div>
+      <div class="hex">#FF6B35</div>
+    </div>
+    <div class="chip" style="background:#fafafa; color:#0a0a0f;">
+      <div><div class="name">Paper</div><div class="note">Light surface, text on dark</div></div>
+      <div class="hex">#FAFAFA</div>
+    </div>
+    <div class="chip" style="background:#a1a1aa; color:#fff; border-color:transparent;">
+      <div><div class="name">Ash</div><div class="note">Secondary text, hairlines</div></div>
+      <div class="hex">#A1A1AA</div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:var(--fg-3);margin-top:12px;">Ember is <strong>accent-only</strong> — reserve it for the mark's dot, single CTA, alert peaks, and ~1 brand moment per view. The rest of the app lives in ink + paper + ash.</p>
+
+  <!-- ============ DONT'S ============ -->
+  <h2>Don'ts</h2>
+  <div class="donts">
+    <div class="dont"><img src="assets/logo/solprobe-mark.svg" width="120" height="80" alt="" style="width: 120px; height: 80px;"><span class="label">Don't stretch</span></div>
+    <div class="dont"><img src="assets/logo/solprobe-mark.svg" width="90" height="90" alt="" style="transform: rotate(18deg);"><span class="label">Don't rotate</span></div>
+    <div class="dont" style="background: #fbbf24;"><img src="assets/logo/solprobe-mark.svg" width="90" height="90" alt=""><span class="label">Don't place on clashing color</span></div>
+    <div class="dont"><img src="assets/logo/solprobe-mark.svg" width="90" height="90" alt="" style="filter: drop-shadow(0 0 12px #FF6B35);"><span class="label">Don't add glow/effects</span></div>
+  </div>
+  <p style="font-size:12px;color:var(--fg-3);margin-top:12px;">Also: don't swap the ember for another color, don't change the waveform path, and don't re-kern the wordmark.</p>
+
+  <!-- ============ APPLYING ACROSS APP ============ -->
+  <h2>Applying across the app</h2>
+  <div class="card" style="padding: 32px;">
+    <p style="margin-top:0;font-size:14px;color:var(--fg-2);">Files ship in <code class="mono">assets/logo/</code>. Drop them into the dashboard's public folder and update the four places below.</p>
+
+    <pre><span class="c">// 1. Copy logo files into Next.js public folder</span>
+<span class="k">apps/dashboard/public/logo/</span>
+  ├─ solprobe-mark.svg            <span class="c">// primary (ink + ember dot)</span>
+  ├─ solprobe-mark-mono.svg       <span class="c">// currentColor for tinting</span>
+  ├─ solprobe-wordmark.svg        <span class="c">// horizontal lockup (light bg)</span>
+  ├─ solprobe-wordmark-dark.svg   <span class="c">// lockup for dark bg</span>
+  └─ favicon.svg                  <span class="c">// full-bleed tile</span></pre>
+
+    <p style="font-size:14px;color:var(--fg-2);"><strong>1. Sidebar brand.</strong> <code class="mono">components/layout/Sidebar.tsx</code>:</p>
+    <pre><span class="k">import</span> Image <span class="k">from</span> <span class="s">'next/image'</span>;
+
+&lt;<span class="k">div</span> className=<span class="s">"flex items-center gap-2 px-3 py-4"</span>&gt;
+  &lt;<span class="k">Image</span> src=<span class="s">"/logo/solprobe-mark.svg"</span> alt=<span class="s">"SolProbe"</span> width={<span class="n">28</span>} height={<span class="n">28</span>} /&gt;
+  &lt;<span class="k">span</span> className=<span class="s">"font-bold tracking-tight"</span>&gt;
+    Sol&lt;<span class="k">span</span> className=<span class="s">"text-muted-foreground font-medium"</span>&gt;Probe&lt;/<span class="k">span</span>&gt;
+  &lt;/<span class="k">span</span>&gt;
+&lt;/<span class="k">div</span>&gt;</pre>
+
+    <p style="font-size:14px;color:var(--fg-2);"><strong>2. Favicon + metadata.</strong> <code class="mono">app/layout.tsx</code>:</p>
+    <pre><span class="k">export const</span> metadata: Metadata = {
+  title: <span class="s">'SolProbe'</span>,
+  description: <span class="s">'Autonomous fault detection for distributed AI training'</span>,
+  icons: { icon: <span class="s">'/logo/favicon.svg'</span> },
+};</pre>
+
+    <p style="font-size:14px;color:var(--fg-2);"><strong>3. Theme tokens.</strong> <code class="mono">app/globals.css</code> — add the ember accent and keep it scoped:</p>
+    <pre><span class="c">/* Ink &amp; Ember tokens — paste into :root */</span>
+<span class="k">--brand</span>: <span class="s">#FF6B35</span>;           <span class="c">/* ember — accent only */</span>
+<span class="k">--brand-fg</span>: <span class="s">#0a0a0f</span>;        <span class="c">/* text on ember */</span>
+<span class="k">--brand-soft</span>: <span class="s">#FFF4EE</span>;      <span class="c">/* ember 6% tint */</span>
+
+<span class="c">/* Usage rules:
+   • Sidebar active item  → bg var(--brand-soft), text var(--brand)
+   • Primary CTA          → bg var(--brand), text var(--brand-fg)
+   • Chart series accent  → var(--brand) for ONE series, never two
+   • Status (ok/warn/crit) unchanged — ember is NOT a status color */</span></pre>
+
+    <p style="font-size:14px;color:var(--fg-2);"><strong>4. Auth / loading / empty states.</strong> Centered wordmark at 180×44. For a loading pulse, animate the ember circle:</p>
+    <pre>&lt;<span class="k">svg</span> viewBox=<span class="s">"0 0 120 120"</span>&gt;
+  <span class="c">{/* ...mark paths... */}</span>
+  &lt;<span class="k">circle</span> cx=<span class="s">"64"</span> cy=<span class="s">"54"</span> r=<span class="s">"6"</span> fill=<span class="s">"#FF6B35"</span>&gt;
+    &lt;<span class="k">animate</span> attributeName=<span class="s">"opacity"</span> values=<span class="s">"1;0.35;1"</span>
+             dur=<span class="s">"1.4s"</span> repeatCount=<span class="s">"indefinite"</span> /&gt;
+  &lt;/<span class="k">circle</span>&gt;
+&lt;/<span class="k">svg</span>&gt;</pre>
+
+    <p style="font-size:14px;color:var(--fg-2);margin-bottom:4px;"><strong>Clear space:</strong> ≥ 1/4 mark-height on all sides. <strong>Minimum size:</strong> 16px — below that use <code class="mono">favicon.svg</code>.</p>
+    <p style="font-size:14px;color:var(--fg-2);margin-bottom:0;"><strong>OG/social image:</strong> wordmark centered on 1200×630 <code class="mono">#0a0a0f</code>, ≥ 120px padding.</p>
+  </div>
+
+  <div style="margin-top:32px; font-size:12px; color:var(--fg-3);">All files are plain SVG. The mono variant uses <code class="mono">currentColor</code>; the primary uses flat fills (no gradients) so it stays crisp at 16px.</div>
+</div>
+</body>
+</html>

@@ -42,3 +42,8 @@ backend/.venv/
 .playwright-cli/
 output/
 AGENTS.md
+
+# Local design-canvas state and visual inspection artifacts
+design-dashboard/.design-canvas.state.json
+design-dashboard/scraps/
+design-dashboard/uploads/
