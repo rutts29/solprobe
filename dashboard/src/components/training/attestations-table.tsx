@@ -63,7 +63,7 @@ export function AttestationsTable({ attestations, loading, explorerUrl = default
                 <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Loading…</td></tr>
               )}
               {!loading && attestations.length === 0 && (
-                <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No attestations yet</td></tr>
+                <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No attestations</td></tr>
               )}
               {attestations.map((a) => (
                 <tr key={a.signature} className={cn(

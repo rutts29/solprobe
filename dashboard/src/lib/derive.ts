@@ -26,7 +26,7 @@ export function avgGpuUtilization(nodes: NodeStatus[]): number {
   return utils.length ? utils.reduce((a, b) => a + b, 0) / utils.length : 0;
 }
 
-/** Average supported GPU temp across every GPU on every connected node. */
+/** Average GPU temp across every GPU on every connected node. */
 export function avgGpuTemp(nodes: NodeStatus[]): number | null {
   const temps: number[] = [];
   for (const n of nodes) {
@@ -37,7 +37,7 @@ export function avgGpuTemp(nodes: NodeStatus[]): number | null {
   return temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : null;
 }
 
-/** Sum of supported power_usage_w across every GPU on every connected node. */
+/** Sum of power_usage_w across every GPU on every connected node. */
 export function totalPowerKw(nodes: NodeStatus[]): number | null {
   let watts = 0;
   let samples = 0;

@@ -1,11 +1,12 @@
+// REPLACE: dashboard/src/app/overview/page.tsx
+// Uses the new <KpiStrip> instead of <HealthCards>. Same hooks, same data flow.
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { KpiStrip } from "@/components/overview/kpi-strip";
 import { ClusterSummary } from "@/components/overview/cluster-summary";
 import { RecentAlerts } from "@/components/overview/recent-alerts";
-import { ErrorBanner } from "@/components/ui/error-banner";
-import { PageHeader } from "@/components/ui/page-header";
 import { useNodes } from "@/hooks/use-nodes";
 import { useAlerts } from "@/hooks/use-alerts";
 import { useWebSocket } from "@/lib/websocket";
@@ -29,7 +30,7 @@ export default function OverviewPage() {
   useEffect(() => {
     fetchHealth()
       .then(setHealth)
-      .catch((err) => setHealthError(err instanceof Error ? err.message : "Health check failed"));
+      .catch((err) => setHealthError(err instanceof Error ? err.message : "Failed to fetch health"));
   }, []);
 
   // Append a sample whenever nodes update (i.e. every poll cycle from useNodes).
@@ -52,16 +53,15 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Cluster Overview"
-        subtitle="Real-time health across every sidecar-connected GPU node."
-        meta={[
-          { tone: "ok", children: `${nodes.length} nodes live` },
-          { tone: healthError ? "crit" : "ok", children: healthError ? "backend unreachable" : "streaming" },
-        ]}
-      />
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight">Cluster Overview</h1>
+      </div>
 
-      {healthError && <ErrorBanner title="Backend unreachable" message={healthError} />}
+      {healthError && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-400">
+          Backend unreachable: {healthError}
+        </div>
+      )}
 
       <KpiStrip nodes={nodes} alerts={alerts} health={health} history={history} />
 

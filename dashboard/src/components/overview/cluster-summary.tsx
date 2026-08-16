@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatRelativeTime } from "@/lib/utils";
-import { gpuTempTone, isGpuTempAvailable, memPct, nodeTone } from "@/lib/derive";
+import { memPct, nodeTone, tempTone } from "@/lib/derive";
 import type { NodeStatus } from "@/lib/types";
 
 interface ClusterSummaryProps {
@@ -14,14 +14,14 @@ interface ClusterSummaryProps {
 }
 
 const TONE_DOT: Record<string, string> = {
-  ok: "bg-[var(--ok)]",
-  warn: "bg-[var(--warn)]",
-  crit: "bg-[var(--crit)]",
-  muted: "bg-muted-foreground",
+  ok: "bg-emerald-500",
+  warn: "bg-amber-500",
+  crit: "bg-red-500",
+  muted: "bg-zinc-500",
 };
 
 function Bar({ value, tone = "ok" }: { value: number; tone?: "ok" | "warn" | "crit" }) {
-  const fill = tone === "crit" ? "bg-[var(--crit)]" : tone === "warn" ? "bg-[var(--warn)]" : "bg-[var(--ok)]";
+  const fill = tone === "crit" ? "bg-red-500" : tone === "warn" ? "bg-amber-500" : "bg-emerald-500";
   return (
     <div className="flex items-center gap-2 min-w-[110px]">
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -43,7 +43,7 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
 
   if (loading) {
     return (
-      <Card className="min-w-0">
+      <Card>
         <CardHeader><CardTitle>Cluster Nodes</CardTitle></CardHeader>
         <CardContent className="space-y-2">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
@@ -53,7 +53,7 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
   }
 
   return (
-    <Card className="min-w-0">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle>Cluster Nodes</CardTitle>
         <div className="flex items-center gap-1 rounded-md border bg-background p-0.5 text-xs">
@@ -88,8 +88,7 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
               {visible.map((node) => {
                 const gpu = node.latest_metrics[0] ?? null;
                 const tone = nodeTone(node);
-                const tempAvailable = gpu ? isGpuTempAvailable(gpu, node) : false;
-                const tTone = gpu ? gpuTempTone(gpu, node) : "muted";
+                const tTone = gpu ? tempTone(gpu.gpu_temp_c) : "muted";
                 return (
                   <tr
                     key={node.node_id}
@@ -109,11 +108,11 @@ export function ClusterSummary({ nodes, loading }: ClusterSummaryProps) {
                       {gpu ? (
                         <span className={cn(
                           "font-mono tabular-nums text-xs",
-                          tTone === "crit" && "text-[var(--crit)]",
-                          tTone === "warn" && "text-[var(--warn)]",
+                          tTone === "crit" && "text-red-500 dark:text-red-400",
+                          tTone === "warn" && "text-amber-500 dark:text-amber-400",
                           tTone === "ok" && "text-foreground",
                         )}>
-                          {tempAvailable ? `${gpu.gpu_temp_c}°C` : "—"}
+                          {gpu.gpu_temp_c}°C
                         </span>
                       ) : "—"}
                     </td>

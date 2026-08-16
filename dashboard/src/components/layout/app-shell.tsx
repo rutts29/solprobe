@@ -1,31 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { useWebSocket } from "@/lib/websocket";
-import { useAuth } from "@/hooks/use-auth";
 import { fetchHealth } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const ws = useWebSocket();
-  const { loaded, isAuthenticated } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [connectedNodes, setConnectedNodes] = useState(0);
   const [criticalAlerts, setCriticalAlerts] = useState(0);
-
-  const isLanding = pathname === "/";
-
-  // Gate: redirect unauthenticated users away from dashboard routes.
-  useEffect(() => {
-    if (loaded && !isAuthenticated && !isLanding) {
-      router.replace("/");
-    }
-  }, [loaded, isAuthenticated, isLanding, router]);
 
   useEffect(() => {
     fetchHealth()
@@ -60,7 +48,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           case "a": router.push("/alerts"); break;
           case "d": router.push("/diagnoses"); break;
           case "t": router.push("/training"); break;
-          case "p": router.push("/policies"); break;
           case "c": router.push("/attestations"); break;
         }
       } else {
@@ -71,12 +58,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", handler);
   }, [router]);
 
-  // Landing page renders standalone (no sidebar/header chrome).
-  if (isLanding) return <>{children}</>;
-
-  // Brief blank while auth is being resolved on first load.
-  if (!loaded || !isAuthenticated) return null;
-
   return (
     <div className="min-h-screen bg-background">
       <Sidebar
@@ -85,9 +66,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         collapsed={collapsed}
         onToggle={() => setCollapsed((c) => !c)}
       />
-      <div className={cn("transition-all duration-200", collapsed ? "ml-16" : "ml-16 md:ml-60")}>
+      <div className={cn("transition-all duration-200", collapsed ? "ml-16" : "ml-60")}>
         <Header wsConnected={ws.connected} criticalAlerts={criticalAlerts} />
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="p-6">{children}</main>
       </div>
     </div>
   );
