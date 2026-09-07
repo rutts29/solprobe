@@ -42,6 +42,15 @@ backend/.venv/
 .playwright-cli/
 output/
 AGENTS.md
+CLAUDE.md
+.claude/
+.review/
+docs/next-steps.md
+docs/sp*-plan.md
+docs/superpowers/
+expansion-PLAN.md
+design-dashboard/
+solprobe-playground.html
 
 # Local design-canvas state and visual inspection artifacts
 design-dashboard/.design-canvas.state.json
