@@ -1,66 +1,76 @@
-# SolProbe Showcase
+# Follow a training run with SolProbe
 
-SolProbe is a fault-detection and diagnosis layer for distributed AI training. The demo here runs the full stack on a single Apple Silicon Mac against a tiny GPT trained on synthetic data, and it can also ingest a Google Colab T4 notebook over REST when free Colab GPU capacity is available.
+This walkthrough connects the bundled TinyGPT trainer to SolProbe. It uses the code in this repository and runs on CPU, Apple MPS, or CUDA through PyTorch. The Rust sidecar reads the trainer's shared-memory metrics and sends them to the backend alongside simulated hardware telemetry or Apple Silicon metrics.
 
-## What SolProbe monitors
+## Start the monitoring stack
 
-A Rust sidecar polls the host every second and forwards three streams to the backend over gRPC: GPU hardware counters (temperature, utilization, framebuffer, power, ECC/XID errors, clock-throttle reasons, PCIe replay), training telemetry from a PyTorch callback (`step`, `loss`, `gradient_norm`, `learning_rate`, `throughput_tps`, `mfu_pct`), and DiLoCo-specific metrics (inner/outer step, pseudo-grad norm, sync duration, worker-speed ratio). Training scripts can also push user-defined custom metrics and full metrics batches directly to the backend over authenticated REST.
+Complete the installation and start the backend and dashboard using the [README](README.md#run-locally). Stop the simulated sidecar from that example before starting the one below, so only one process uses metrics port 9100.
 
-## Anomalies covered
-
-- **Edge thresholds (Rust sidecar)** — thermal throttle, memory pressure, XID errors, ECC double-bit, clock throttling, gradient-norm threshold.
-- **Central statistical detectors** — z-score on loss / gradient / throughput / temperature, cross-node straggler detection, correlated failures, DiLoCo drift and divergence.
-- **Phase 2 training detectors** — numeric instability (NaN/Inf in loss or grads), training stalled (step doesn't advance), loss plateau (slope ~0 after warmup), throughput regression vs. recent baseline.
-- **Phase 3 monitoring policy engine** — user-defined thresholds with operators (`gt`, `gte`, `lt`, `lte`, `abs_gt`, `stale_for`), sustained-violation `for_seconds`, severity, cooldown, and optional node/job scope. Policies run over GPU, training, DiLoCo, and custom metrics.
-- **Phase 5 alert lifecycle** — alerts move through `acknowledged` → `investigating` → `resolved` / `ignored`, with free-text notes per alert.
-- **LLM diagnosis** — Claude proposes a root cause and one of seven recovery actions, with a deterministic local fallback when the API is unavailable.
-
-## What the nanochat demo proves
-
-The script wires up backend, dashboard, and an Apple Silicon sidecar with a real `job_id`, registers a "Nanochat MPS demo" job, and (optionally) launches `training/train_mps.py` to train a tiny GPT on MPS. A reviewer opens `/training` and sees the active run with live loss / grad-norm / throughput / MFU charts; `/nodes/node-0` shows live MPS utilization and Metal framebuffer; `/policies` shows the preset library plus the new custom-metric source; and `/alerts` collects anything the detectors raise. The script is idempotent — running it again with the backend already up will reuse the running services and just register a new job.
-
-## What the Colab demo proves
-
-The Training page includes a downloadable `solprobe_colab_t4_demo.ipynb` notebook. In Colab, select a T4 runtime, point `BACKEND_URL` at a public SolProbe backend, set the API key, and run all cells. The notebook trains a tiny PyTorch MLP and posts GPU/training batches to `/api/v1/metrics/batches`, so the dashboard shows a `Google Colab T4 tiny training` run without installing or running the Rust sidecar inside Colab.
-
-## How to run
-
-Prerequisites (one-time):
+From the repository root, create a shared metrics directory and start the sidecar:
 
 ```bash
-# Backend venv
-cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && cd ..
-
-# Dashboard deps
-cd dashboard && npm install && cd ..
-
-# Rust toolchain (cargo on PATH)
+mkdir -p .runs/tinygpt/mmap
+cargo run --manifest-path sidecar/Cargo.toml -- \
+  --simulate --node-id node-0 --job-id tinygpt-demo \
+  --mmap-dir "$PWD/.runs/tinygpt/mmap"
 ```
 
-Launch the demo:
+On an Apple Silicon Mac, use `--apple-gpu` instead of `--simulate` for real GPU utilization and memory readings. The simulated collector also accepts the trainer's real metrics; those replace its synthetic training values while the trainer is running.
+
+## Register the run
+
+In another terminal, from the repository root:
 
 ```bash
-make demo
+curl --fail-with-body http://127.0.0.1:8000/api/v1/jobs \
+  -H 'Content-Type: application/json' \
+  -H 'X-SolProbe-API-Key: solprobe-demo-key' \
+  -d '{"job_id":"tinygpt-demo","name":"TinyGPT training demo","config":{"trainer":"training.train_mps"},"node_ids":["node-0"]}'
+
+curl --fail-with-body -X PATCH \
+  http://127.0.0.1:8000/api/v1/jobs/tinygpt-demo/status \
+  -H 'Content-Type: application/json' \
+  -H 'X-SolProbe-API-Key: solprobe-demo-key' \
+  -d '{"status":"running"}'
 ```
 
-Open `http://localhost:3000` and sign in with `solprobe-demo-key`.
+## Train and inject a gradient spike
 
-For the Colab path, expose backend port `8000` with a tunnel or deployment, then download the notebook from `http://localhost:3000/colab/solprobe_colab_t4_demo.ipynb`.
-
-To also run the MPS trainer (writes real training metrics into the mmap the sidecar reads):
+Install PyTorch into a separate environment, then run the bundled trainer:
 
 ```bash
-SOLPROBE_DEMO_TRAIN=1 SOLPROBE_TRAIN_STEPS=300 bash scripts/demo_nanochat_solprobe.sh
+python3 -m venv training/.venv
+training/.venv/bin/python -m pip install torch
+training/.venv/bin/python -m training.train_mps \
+  --node-id node-0 --mmap-dir "$PWD/.runs/tinygpt/mmap" \
+  --steps 120 --slow-step-ms 1000 \
+  --inject-spike-at 30 --spike-duration 10 --spike-magnitude 1000
 ```
 
-The script logs each component to `.runs/<run_id>/{backend,dashboard,sidecar,training}.log` and prints the dashboard URLs when ready. No GPU is required — Apple Silicon (MPS) and CPU both work.
+The trainer selects MPS when available, then CUDA, then CPU. Its callback records loss, gradient norm, learning rate, and throughput after each step. The deliberate slowdown gives the sidecar's one-second polling loop time to observe the values. The injected fault multiplies gradients for ten steps.
 
-## Known limits
+Open the dashboard's **Training** page and select **TinyGPT training demo**. Compare the training charts around the injected spike, then inspect **Alerts** for the associated evidence. The **Nodes** page shows the hardware stream. Without an Anthropic key, use metrics, alert evidence, and investigation notes; provider-backed diagnosis is optional.
 
-- Apple Silicon GPU temperature and power are not exposed by Metal, so those fields render as `—` instead of `0`.
-- All state is in-memory; restarting the backend wipes alerts, diagnoses, jobs, and custom metrics. There is no Postgres persistence yet.
-- Colab free GPU availability is best-effort; if Colab assigns CPU, the notebook still runs but reports zero GPU utilization.
-- Custom metrics and Colab metrics batch ingest are REST paths; they don't flow through the sidecar/protobuf path.
-- The Solana trust layer (4 Anchor programs for attestation, escrow, reputation, staking) is demo-stage — included to validate the design, not wired into the production reward loop.
-- Local API-key auth protects REST and WebSocket control-plane surfaces. There is no multi-user RBAC yet.
-- Diagnosis defaults to a local heuristic fallback if `ANTHROPIC_API_KEY` isn't set, so the demo runs without external network calls.
+When training finishes, mark the run complete:
+
+```bash
+curl --fail-with-body -X PATCH \
+  http://127.0.0.1:8000/api/v1/jobs/tinygpt-demo/status \
+  -H 'Content-Type: application/json' \
+  -H 'X-SolProbe-API-Key: solprobe-demo-key' \
+  -d '{"status":"completed"}'
+```
+
+Stop the sidecar, dashboard, and backend with Ctrl+C in their terminals. Backend state lasts for that process's lifetime.
+
+## Optional Nanochat integration
+
+`scripts/demo_nanochat_solprobe.sh` is a separate Apple Silicon launcher. `make demo` starts its backend, dashboard, and Apple GPU sidecar and registers a Nanochat-labelled job. It does **not** start the bundled TinyGPT trainer.
+
+Setting `SOLPROBE_DEMO_TRAIN=1` asks that launcher to run `runs/run_solprobe_mps_smoke.sh` from a patched Nanochat checkout. Supply that checkout through `NANOCHAT_DIR`; its default is `.worktrees/nanochat-solprobe`. The checkout is not included here. Use the TinyGPT steps above for a demo that needs only this repository.
+
+The launcher accepts `--run-id`, `NODE_ID`, `SOLPROBE_MMAP_DIR`, and port overrides, and writes component logs to `.runs/<run_id>/`. See its [environment options](scripts/demo_nanochat_solprobe.sh) before connecting an existing Nanochat workspace.
+
+## Other telemetry sources
+
+The [Colab guide](docs/colab.md) describes notebook ingestion over authenticated REST. This path does not require the Rust sidecar inside the notebook. A reachable backend and the API key are required; GPU availability depends on the Colab runtime.

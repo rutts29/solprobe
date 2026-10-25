@@ -2,7 +2,7 @@ FROM python:3.14-slim
 WORKDIR /app
 
 # Install dependencies first (layer caching)
-COPY backend/pyproject.toml .
+COPY backend/pyproject.toml backend/LICENSE ./
 RUN pip install --no-cache-dir .
 
 # Copy proto definitions
