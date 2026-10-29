@@ -3,7 +3,7 @@
 **Training observability, anomaly detection, and diagnosis.**
 
 [![CI](https://github.com/rutts29/solprobe/actions/workflows/ci.yml/badge.svg)](https://github.com/rutts29/solprobe/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 SolProbe brings training metrics, GPU telemetry, and alerts into one dashboard so you can investigate unstable or stalled runs. A Rust sidecar collects signals, a FastAPI service detects faults and evaluates monitoring policies, and a Next.js dashboard presents the evidence and recovery suggestions.
 
@@ -104,4 +104,4 @@ Built to explore how training failures can be detected and investigated from tel
 
 ## License
 
-[MIT](LICENSE). Copyright (c) 2026 Ruttansh Bhatelia.
+[Apache License 2.0](LICENSE). Copyright (c) 2026 Ruttansh Bhatelia.

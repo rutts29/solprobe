@@ -41,4 +41,4 @@ backend/.venv/bin/python -m grpc_tools.protoc \
 
 Keep credentials, local environment files, `.runs/` logs, and local assistant or design-tool state out of commits. The existing `.gitignore` covers these development artifacts.
 
-The root `LICENSE` is the project's MIT licence. Identical copies live in each independently packaged component so Python, JavaScript, Rust, and container distributions can retain the notice. Keep those copies and their SPDX metadata aligned when changing packaging.
+The root `LICENSE` is the project's Apache 2.0 licence. Identical copies live in each independently packaged component so Python, JavaScript, Rust, and container distributions can retain the notice. Keep those copies and their SPDX metadata aligned when changing packaging.

@@ -13,4 +13,4 @@ The monitoring backend does not submit transactions to these programs. The dashb
 
 [`Anchor.toml`](Anchor.toml) contains the local-validator configuration and test command. The workspace is in [`Cargo.toml`](Cargo.toml), with JavaScript test dependencies in [`package.json`](package.json). Chain deployment and token operations require a separate, deliberate setup; the main SolProbe quick start does not invoke them.
 
-[MIT](LICENSE). Copyright (c) 2026 Ruttansh Bhatelia.
+[Apache License 2.0](LICENSE). Copyright (c) 2026 Ruttansh Bhatelia.

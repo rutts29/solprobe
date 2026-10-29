@@ -21,4 +21,4 @@ npm run build
 
 The request-demo form has separate server-side email configuration; see [configuration](../docs/configuration.md#request-demo-form-hosting). The attestation view contains labelled samples from the [compute verification experiments](../solana/README.md).
 
-[MIT](LICENSE). Copyright (c) 2026 Ruttansh Bhatelia.
+[Apache License 2.0](LICENSE). Copyright (c) 2026 Ruttansh Bhatelia.
